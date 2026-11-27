@@ -47,6 +47,12 @@ export function InstagramAccountView({
 }: InstagramAccountProps) {
   // Modal states
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isQuickLoginOpen, setIsQuickLoginOpen] = useState(false);
+  const [quickUsername, setQuickUsername] = useState('');
+  const [quickAccountName, setQuickAccountName] = useState('');
+  const [quickDailyTarget, setQuickDailyTarget] = useState(5);
+  const [quickCategory, setQuickCategory] = useState('Genel');
+  const [isSubmittingQuick, setIsSubmittingQuick] = useState(false);
   const [editingAccount, setEditingAccount] = useState<InstagramAccount | null>(null);
   const [testResult, setTestResult] = useState<{ accountId?: string; message: string; success: boolean } | null>(null);
 
@@ -135,6 +141,50 @@ export function InstagramAccountView({
     resetForm();
   };
 
+  const handleQuickLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quickUsername.trim()) return;
+    setIsSubmittingQuick(true);
+    try {
+      const res = await fetch('/api/auth/instagram/browser-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: quickUsername,
+          accountName: quickAccountName,
+          dailyTarget: quickDailyTarget,
+          categoryFocus: quickCategory,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Giriş yapılamadı.');
+
+      setTestResult({
+        accountId: data.account?.id,
+        success: true,
+        message: data.message || 'Instagram hesabı izole tarayıcı oturumuyla bağlandı!',
+      });
+      setIsQuickLoginOpen(false);
+      setQuickUsername('');
+      setQuickAccountName('');
+      setTimeout(() => {
+        window.location.reload();
+      }, 700);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setTestResult({
+        success: false,
+        message: `Instagram ile giriş hatası: ${msg}`,
+      });
+    } finally {
+      setIsSubmittingQuick(false);
+    }
+  };
+
+  const handleOAuthLogin = () => {
+    window.location.href = '/api/auth/instagram/login';
+  };
+
   const handleTestConnection = (acc: InstagramAccount) => {
     if (acc.isTestMode) {
       setTestResult({
@@ -178,14 +228,25 @@ export function InstagramAccountView({
           </p>
         </div>
 
-        <button
-          onClick={openAddModal}
-          disabled={accounts.length >= 10 || isLoading}
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 text-white text-xs font-semibold shadow-lg shadow-pink-950/40 transition disabled:opacity-50 cursor-pointer"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Yeni Instagram Hesabı Ekle</span>
-        </button>
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            onClick={() => setIsQuickLoginOpen(true)}
+            disabled={accounts.length >= 10 || isLoading}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 via-rose-500 to-purple-600 hover:opacity-95 text-white text-xs font-bold shadow-lg shadow-pink-950/40 transition disabled:opacity-50 cursor-pointer"
+          >
+            <Sparkles className="w-4 h-4 text-amber-200" />
+            <span>Instagram ile Giriş Yap</span>
+          </button>
+
+          <button
+            onClick={openAddModal}
+            disabled={accounts.length >= 10 || isLoading}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700/80 text-xs font-semibold transition disabled:opacity-50 cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Manuel Ekle</span>
+          </button>
+        </div>
       </div>
 
       {/* Test Result Alert */}
@@ -282,6 +343,20 @@ export function InstagramAccountView({
                     <span>Reels İzni:</span>
                     <span className="text-emerald-400 font-semibold flex items-center gap-1">
                       <CheckCircle2 className="w-3.5 h-3.5" /> Aktif
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-zinc-400">
+                    <span className="flex items-center gap-1 text-cyan-400">
+                      <Globe className="w-3.5 h-3.5" /> İzole Tarayıcı:
+                    </span>
+                    <span className="text-cyan-300 font-mono text-[11px] truncate max-w-[150px]" title={acc.browserFingerprint || 'Chrome 123 (İzole Oturum)'}>
+                      {acc.browserFingerprint?.split('(')[0]?.trim() || 'İzole Oturum Aktif'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-zinc-400">
+                    <span>Otomatik Reels & Story:</span>
+                    <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                      <Check className="w-3.5 h-3.5" /> Otomatik Aktif
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-zinc-400">
@@ -529,6 +604,140 @@ export function InstagramAccountView({
                   className="px-5 py-2 rounded-xl bg-pink-600 hover:bg-pink-500 text-white text-xs font-semibold shadow-lg shadow-pink-950/40 transition disabled:opacity-50 cursor-pointer"
                 >
                   {editingAccount ? 'Değişiklikleri Kaydet' : 'Hesabı Ekle'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Instagram Login & Isolated Browser Modal */}
+      {isQuickLoginOpen && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-zinc-900 border border-zinc-700 rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl my-8">
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 flex items-center justify-center text-white shadow-md">
+                  <InstagramIcon className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Instagram ile Giriş Yap</h3>
+                  <p className="text-[11px] text-zinc-400">Token veya ID kopyalamadan anında izole tarayıcı profiliyle bağlayın</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsQuickLoginOpen(false)}
+                className="text-zinc-500 hover:text-white transition p-1 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Bilgilendirme Kutusu */}
+            <div className="p-3.5 rounded-xl bg-zinc-800/60 border border-zinc-700/80 space-y-1.5 text-xs">
+              <div className="flex items-center gap-2 text-cyan-400 font-semibold">
+                <Globe className="w-4 h-4" />
+                <span>Otomatik İzole Tarayıcı Koruması</span>
+              </div>
+              <p className="text-[11px] text-zinc-300 leading-relaxed">
+                Her eklediğiniz hesap sistemde <strong>tamamen farklı bir tarayıcı oturumu ve User-Agent</strong> ile çalışır. Hesaplarınız asla birbiriyle çakışmaz ve 5 günlük Reels ile 24 saatlik Story otomasyonları otomatik aktif edilir.
+              </p>
+            </div>
+
+            <form onSubmit={handleQuickLogin} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-zinc-300 mb-1">
+                  Instagram Kullanıcı Adınız <span className="text-rose-400">*</span>
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-2.5 text-xs text-zinc-500">@</span>
+                  <input
+                    type="text"
+                    required
+                    placeholder="ornek_hesap"
+                    value={quickUsername}
+                    onChange={(e) => setQuickUsername(e.target.value)}
+                    className="w-full bg-zinc-800/90 border border-zinc-700 rounded-xl pl-8 pr-3 py-2.5 text-xs text-white focus:outline-none focus:border-pink-500 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-zinc-300 mb-1">
+                  Hesap İsmi / Başlığı (İsteğe Bağlı)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Örn: Evlilik İlanları - Ege Bölgesi"
+                  value={quickAccountName}
+                  onChange={(e) => setQuickAccountName(e.target.value)}
+                  className="w-full bg-zinc-800/90 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-pink-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-zinc-400 mb-1">Günlük Reels Hedefi</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={quickDailyTarget}
+                    onChange={(e) => setQuickDailyTarget(parseInt(e.target.value) || 5)}
+                    className="w-full bg-zinc-800/90 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-400 mb-1">Odak Kategorisi</label>
+                  <select
+                    value={quickCategory}
+                    onChange={(e) => setQuickCategory(e.target.value)}
+                    className="w-full bg-zinc-800/90 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500"
+                  >
+                    <option value="Genel">Genel</option>
+                    <option value="Romantik Sinematik">Romantik Sinematik</option>
+                    <option value="Sahil ve deniz">Sahil ve deniz</option>
+                    <option value="İlişki Tavsiyeleri">İlişki Tavsiyeleri</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Otomatik Açılan Özellikler Özeti */}
+              <div className="space-y-1.5 p-3 rounded-xl bg-emerald-950/30 border border-emerald-500/20 text-[11px] text-emerald-300">
+                <div className="flex items-center gap-1.5 font-semibold">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Bu hesap için otomatik açılacak özellikler:</span>
+                </div>
+                <ul className="list-disc list-inside space-y-0.5 text-zinc-300 pl-1">
+                  <li>Günde 5 otomatik özgün Reels video montajı ve yayını</li>
+                  <li>24 saatte bir otomatik Story görseli ve link yayını</li>
+                  <li>Bağımsız, izole tarayıcı profili (Oturum / IP / Cookie güvenliği)</li>
+                </ul>
+              </div>
+
+              <div className="flex flex-col gap-2 pt-2">
+                <button
+                  type="submit"
+                  disabled={isSubmittingQuick || !quickUsername.trim()}
+                  className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 via-rose-500 to-purple-600 hover:opacity-95 text-white text-xs font-bold shadow-lg shadow-pink-950/50 transition disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>{isSubmittingQuick ? 'İzole Oturum Açılıyor...' : 'Hesabı Giriş Yaparak Sisteme Bağla'}</span>
+                </button>
+
+                <div className="relative flex py-1 items-center">
+                  <div className="flex-grow border-t border-zinc-800"></div>
+                  <span className="flex-shrink mx-2 text-[10px] text-zinc-500 uppercase">veya</span>
+                  <div className="flex-grow border-t border-zinc-800"></div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleOAuthLogin}
+                  className="w-full py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold border border-zinc-700 transition flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <ExternalLink className="w-3.5 h-3.5 text-pink-400" />
+                  <span>Resmi Meta / Instagram Giriş Ekranına Git (OAuth)</span>
                 </button>
               </div>
             </form>

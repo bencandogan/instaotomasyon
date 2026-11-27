@@ -2,8 +2,6 @@ import { NextResponse } from 'next/server';
 import { PlatformRepository } from '@/lib/store/repository';
 import { InstagramAccount } from '@/types';
 
-export const dynamic = 'force-dynamic';
-
 export async function GET() {
   try {
     const accounts = await PlatformRepository.getInstagramAccounts();

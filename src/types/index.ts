@@ -164,6 +164,11 @@ export interface InstagramAccount {
   categoryFocus?: string;
   notes?: string;
   brandSettings?: BrandOutroSettings;
+  browserProfileId?: string;
+  browserFingerprint?: string;
+  autoPublishEnabled?: boolean;
+  autoStoryEnabled?: boolean;
+  oauthConnected?: boolean;
   createdAt: string;
   updatedAt: string;
 }

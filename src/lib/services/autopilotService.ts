@@ -158,30 +158,45 @@ export class AutopilotService {
               continue;
             }
 
-            // Instagram'a yayınla
-            const pubResult = await InstagramService.publishVideo(video);
-            if (pubResult.success) {
+            // Sisteme bağlı ve otomatik yayını açık tüm Instagram hesaplarını al
+            const allAccounts = await PlatformRepository.getInstagramAccounts();
+            const targetAccounts = allAccounts.filter(
+              (acc) => acc.isConnected && acc.autoPublishEnabled !== false
+            );
+            const publishList = targetAccounts.length > 0 ? targetAccounts : [await PlatformRepository.getActiveInstagramAccount()];
+
+            let anySuccess = false;
+            for (const acc of publishList) {
+              try {
+                const pubResult = await InstagramService.publishVideo(video);
+                if (pubResult.success) {
+                  anySuccess = true;
+                  publishedItems.push({
+                    id: `${item.id}-${acc.id}`,
+                    title: `${item.videoTitle} (${acc.instagramUsername})`,
+                    scheduledTime: item.scheduledTime,
+                    permalink: pubResult.permalink,
+                  });
+                  messages.push(`Reels yayınlandı [${acc.instagramUsername} - ${acc.browserFingerprint || 'İzole'}]: "${item.videoTitle}"`);
+                } else {
+                  messages.push(`Reels yayınlama uyarısı [${acc.instagramUsername}]: ${pubResult.error}`);
+                }
+              } catch (accErr: unknown) {
+                const accMsg = accErr instanceof Error ? accErr.message : String(accErr);
+                messages.push(`Hesap yayınlama hatası [${acc.instagramUsername}]: ${accMsg}`);
+              }
+            }
+
+            if (anySuccess) {
               item.status = 'published';
-              item.updatedAt = nowIso;
-              await PlatformRepository.saveQueueItem(item);
-
-              publishedItems.push({
-                id: item.id,
-                title: item.videoTitle,
-                scheduledTime: item.scheduledTime,
-                permalink: pubResult.permalink,
-              });
-
-              messages.push(`Reels otomatik yayınlandı: "${item.videoTitle}"`);
             } else {
               item.attempts = (item.attempts || 0) + 1;
               if (item.attempts >= (item.maxAttempts || 3)) {
                 item.status = 'failed';
               }
-              item.updatedAt = nowIso;
-              await PlatformRepository.saveQueueItem(item);
-              messages.push(`Reels yayınlama hatası ("${item.videoTitle}"): ${pubResult.error}`);
             }
+            item.updatedAt = nowIso;
+            await PlatformRepository.saveQueueItem(item);
           } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
             item.attempts = (item.attempts || 0) + 1;
@@ -221,19 +236,36 @@ export class AutopilotService {
           }
 
           if (shouldPublishStory) {
-            messages.push('24 saatlik Story yayın zamanı geldi. Story yayına alınıyor...');
-            const storyRes = await InstagramService.publishStory({
-              imageUrl: storySettings.storyImageUrl,
-              storyLink: storySettings.storyLink,
-              linkText: storySettings.linkText || 'Uygulamayı İndir 📲',
-            });
+            messages.push('24 saatlik Story yayın zamanı geldi. Bağlı tüm hesaplara yayına alınıyor...');
+            const allAccounts = await PlatformRepository.getInstagramAccounts();
+            const targetStoryAccounts = allAccounts.filter(
+              (acc) => acc.isConnected && acc.autoStoryEnabled !== false
+            );
+            const storyList = targetStoryAccounts.length > 0 ? targetStoryAccounts : [await PlatformRepository.getActiveInstagramAccount()];
 
-            if (storyRes.success) {
-              publishedStoryCount++;
-              messages.push('24 saatlik Story başarıyla Instagram\'da paylaşıldı.');
-            } else {
-              messages.push(`Story yayınlanırken hata: ${storyRes.error}`);
+            for (const sAcc of storyList) {
+              try {
+                const storyRes = await InstagramService.publishStory({
+                  imageUrl: storySettings.storyImageUrl,
+                  storyLink: storySettings.storyLink,
+                  linkText: storySettings.linkText || 'Uygulamayı İndir 📲',
+                  accountId: sAcc.id,
+                });
+
+                if (storyRes.success) {
+                  publishedStoryCount++;
+                  messages.push(`24 saatlik Story paylaşıldı [${sAcc.name} - ${sAcc.instagramUsername}]`);
+                } else {
+                  messages.push(`Story uyarısı [${sAcc.instagramUsername}]: ${storyRes.error}`);
+                }
+              } catch (sErr: unknown) {
+                const sMsg = sErr instanceof Error ? sErr.message : String(sErr);
+                messages.push(`Story gönderim hatası [${sAcc.instagramUsername}]: ${sMsg}`);
+              }
             }
+
+            storySettings.lastPublishedAt = nowIso;
+            await PlatformRepository.saveStorySettings(storySettings);
           }
         }
       } catch (err: unknown) {
