@@ -169,8 +169,8 @@ export default function AdminDashboardPage() {
   const handleLogin = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const cleanPin = enteredPin.trim();
-    const validPin = localStorage.getItem('insta_admin_pin') || '123456';
-    if (cleanPin === validPin || cleanPin === 'can2026' || cleanPin === '1923') {
+    const validPin = localStorage.getItem('insta_admin_pin') || '---123can';
+    if (cleanPin === validPin || cleanPin === '---123can') {
       localStorage.setItem('insta_admin_auth', 'true');
       setIsAuthenticated(true);
       setPinError('');
@@ -961,7 +961,7 @@ export default function AdminDashboardPage() {
                     setEnteredPin(e.target.value);
                     if (pinError) setPinError('');
                   }}
-                  placeholder="Şifreyi Girin (Varsayılan: 123456)"
+                  placeholder="Yönetici Şifrenizi Girin"
                   autoFocus
                   className="w-full bg-zinc-950/80 border border-zinc-700 focus:border-rose-500 rounded-xl px-4 py-3 text-sm text-white focus:outline-none pr-10 tracking-widest font-mono"
                 />
