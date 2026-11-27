@@ -1,0 +1,1134 @@
+rules_version = '2';
+
+// ===============================================================
+// Evlilik İlanları – AI Instagram Reels Otomasyon Platformu
+// Cloud Firestore Güvenlik Kuralları (firestore.rules)
+// ===============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: admin_users
+    // Document ID: {userId} (Firebase Auth UID)
+    // Fields:
+    //   - email: string (required, valid email, max 100)
+    //   - role: string (required, 'admin' | 'superadmin' | 'editor')
+    //   - displayName: string (optional, max 100)
+    //   - photoURL: string (optional, valid URL, max 2000)
+    //   - isActive: bool (optional)
+    //   - createdAt: string/timestamp (required, immutable)
+    //   - updatedAt: string/timestamp (required)
+    //
+    // Collection: instagram_settings
+    // Document ID: config (or string id)
+    // Fields:
+    //   - isConnected: bool (required)
+    //   - accountType: string (required, 'BUSINESS' | 'CREATOR' | 'PERSONAL')
+    //   - instagramAccountId: string (required, max 100)
+    //   - instagramUsername: string (required, max 100)
+    //   - facebookPageId: string (required, max 100)
+    //   - facebookPageName: string (required, max 100)
+    //   - tokenExpiresAt: string/timestamp (required)
+    //   - tokenDaysRemaining: number (required)
+    //   - lastTokenRefresh: string/timestamp (required)
+    //   - hasReelsPermission: bool (required)
+    //   - hasInsightsPermission: bool (required)
+    //   - appIdMasked: string (required, max 100)
+    //   - appSecretMasked: string (required, max 100)
+    //   - userAccessTokenMasked: string (required, max 200)
+    //   - isTestMode: bool (required)
+    //   - updatedAt: string/timestamp (required)
+    //
+    // Collection: ai_settings
+    // Document ID: config (or string id)
+    // Fields:
+    //   - openaiModel: string (required, max 100)
+    //   - falModels: list (required, max 30)
+    //   - selectedFalModelId: string (required, max 100)
+    //   - openaiApiKeyMasked: string (required, max 100)
+    //   - falApiKeyMasked: string (required, max 100)
+    //   - systemPromptBase: string (required, max 10000)
+    //   - temperature: number (required, 0.0 to 2.0)
+    //   - testMode: bool (required)
+    //   - updatedAt: string/timestamp (required)
+    //
+    // Collection: content_categories
+    // Document ID: {categoryId}
+    // Fields:
+    //   - id: string (required, immutable, max 50)
+    //   - name: string (required, max 200)
+    //   - key: string (required, enum)
+    //   - description: string (required, max 1000)
+    //   - targetDailyCount: number (required, 0 to 100)
+    //   - isActive: bool (required)
+    //   - promptGuideline: string (required, max 5000)
+    //   - musicMood: string (required, max 500)
+    //   - createdAt: string/timestamp (required, immutable)
+    //   - updatedAt: string/timestamp (required)
+    //
+    // Collection: content_ideas
+    // Document ID: {ideaId}
+    // Fields:
+    //   - id: string (required, immutable, max 50)
+    //   - categoryId: string (required, max 50)
+    //   - categoryKey: string (required, max 50)
+    //   - title: string (required, max 300)
+    //   - scenario: string (required, max 5000)
+    //   - sceneDescription: string (required, max 5000)
+    //   - generationPrompt: string (required, max 5000)
+    //   - turkishSubtitles: list (required, max 100)
+    //   - caption: string (required, max 3000)
+    //   - hashtags: list (required, max 50)
+    //   - coverPrompt: string (required, max 2000)
+    //   - status: string (required, enum)
+    //   - repetitionCheckHash: string (required, max 100)
+    //   - createdAt: string/timestamp (required, immutable)
+    //   - updatedAt: string/timestamp (required)
+    //
+    // Collection: generated_videos
+    // Document ID: {videoId}
+    // Fields:
+    //   - id: string (required, immutable, max 50)
+    //   - ideaId: string (optional, max 50)
+    //   - title: string (required, max 300)
+    //   - categoryKey: string (required, max 50)
+    //   - productionType: string (required, 'ai_video'|'ffmpeg_motion')
+    //   - videoUrl: string (required, max 2000)
+    //   - thumbnailUrl: string (required, max 2000)
+    //   - durationSeconds: number (required, 0 to 600)
+    //   - width: number (required, > 0 to 4096)
+    //   - height: number (required, > 0 to 4096)
+    //   - fps: number (required, > 0 to 120)
+    //   - format: string (required, max 20)
+    //   - aspectRatio: string (required, max 20)
+    //   - caption: string (required, max 3000)
+    //   - hashtags: list (required, max 50)
+    //   - subtitlesApplied: bool (required)
+    //   - logoApplied: bool (required)
+    //   - costUsd: number (required, >= 0)
+    //   - modelUsed: string (optional, max 100)
+    //   - status: string (required, enum)
+    //   - errorMessage: string (optional, max 1000)
+    //   - retryCount: number (required, >= 0)
+    //   - instagramMediaId: string (optional, max 100)
+    //   - instagramPermalink: string (optional, max 1000)
+    //   - publishedAt: string/timestamp (optional)
+    //   - createdAt: string/timestamp (required, immutable)
+    //   - updatedAt: string/timestamp (required)
+    //
+    // Collection: publish_queue
+    // Document ID: {queueId}
+    // Fields:
+    //   - id: string (required, immutable, max 50)
+    //   - videoId: string (required, max 100)
+    //   - videoTitle: string (required, max 300)
+    //   - thumbnailUrl: string (required, max 2000)
+    //   - scheduledTime: string/timestamp (required)
+    //   - slotLabel: string (required, max 100)
+    //   - status: string (required, enum)
+    //   - attempts: number (required, >= 0)
+    //   - maxAttempts: number (required, >= 1)
+    //   - lastAttemptAt: string/timestamp (optional)
+    //   - instagramContainerId: string (optional, max 100)
+    //   - instagramMediaId: string (optional, max 100)
+    //   - instagramPermalink: string (optional, max 1000)
+    //   - errorMessage: string (optional, max 1000)
+    //   - createdAt: string/timestamp (required, immutable)
+    //   - updatedAt: string/timestamp (required)
+    //
+    // Collection: publish_history
+    // Document ID: {historyId}
+    // Fields:
+    //   - id: string (required, immutable, max 50)
+    //   - videoId: string (required, max 100)
+    //   - queueItemId: string (required, max 100)
+    //   - instagramMediaId: string (required, max 100)
+    //   - permalink: string (required, max 1000)
+    //   - publishedAt: string/timestamp (required)
+    //   - caption: string (required, max 3000)
+    //   - likes: number (required, >= 0)
+    //   - comments: number (required, >= 0)
+    //   - views: number (required, >= 0)
+    //   - reach: number (required, >= 0)
+    //   - lastStatsSyncAt: string/timestamp (optional)
+    //
+    // Collection: daily_statistics
+    // Document ID: {statId} (e.g. YYYY-MM-DD)
+    // Fields:
+    //   - id: string (required, max 50)
+    //   - date: string (required, max 20)
+    //   - producedCount: number (required, >= 0)
+    //   - publishedCount: number (required, >= 0)
+    //   - failedCount: number (required, >= 0)
+    //   - pendingCount: number (required, >= 0)
+    //   - totalCostUsd: number (required, >= 0)
+    //   - instagramViews: number (required, >= 0)
+    //   - instagramLikes: number (required, >= 0)
+    //   - instagramComments: number (required, >= 0)
+    //   - targetDailyCount: number (required, >= 0)
+    //   - completionRatePercent: number (required, >= 0)
+    //   - updatedAt: string/timestamp (required)
+    //
+    // Collection: api_usage
+    // Document ID: {usageId}
+    // Fields:
+    //   - id: string (required, max 50)
+    //   - provider: string (required, 'openai'|'fal_ai'|'meta_instagram')
+    //   - endpoint: string (required, max 200)
+    //   - unitsUsed: number (required, >= 0)
+    //   - unitType: string (required, 'tokens'|'seconds'|'call')
+    //   - costUsd: number (required, >= 0)
+    //   - durationMs: number (required, >= 0)
+    //   - status: string (required, 'success'|'error')
+    //   - errorMessage: string (optional, max 1000)
+    //   - relatedVideoId: string (optional, max 100)
+    //   - timestamp: string/timestamp (required)
+    //
+    // Collection: system_logs
+    // Document ID: {logId}
+    // Fields:
+    //   - id: string (required, max 50)
+    //   - level: string (required, 'INFO'|'WARN'|'ERROR')
+    //   - module: string (required, enum)
+    //   - action: string (required, max 100)
+    //   - message: string (required, max 2000)
+    //   - details: map (optional)
+    //   - timestamp: string/timestamp (required)
+    //
+    // Collection: cost_limits
+    // Document ID: config (or string id)
+    // Fields:
+    //   - dailySpendingLimitUsd: number (required, >= 0)
+    //   - monthlySpendingLimitUsd: number (required, >= 0)
+    //   - maxCostPerVideoUsd: number (required, >= 0)
+    //   - maxDailyAiVideos: number (required, >= 0)
+    //   - maxDailyFfmpegVideos: number (required, >= 0)
+    //   - maxDailyTotalVideos: number (required, >= 0)
+    //   - maxRetriesPerVideo: number (required, >= 0)
+    //   - circuitBreakerActive: bool (required)
+    //   - todaySpentUsd: number (required, >= 0)
+    //   - monthSpentUsd: number (required, >= 0)
+    //   - todayAiVideosProduced: number (required, >= 0)
+    //   - todayFfmpegVideosProduced: number (required, >= 0)
+    //   - updatedAt: string/timestamp (required)
+    //
+    // Collection: general_settings
+    // Document ID: config (or string id)
+    // Fields:
+    //   - brandName: string (required, max 100)
+    //   - brandTagline: string (required, max 200)
+    //   - brandLogoUrl: string (required, max 2000)
+    //   - watermarkEnabled: bool (required)
+    //   - timezone: string (required, max 50)
+    //   - defaultPublishSlots: list (required, max 20)
+    //   - autoPublishEnabled: bool (required)
+    //   - autoGenerateDailyEnabled: bool (required)
+    //   - notificationEmail: string (optional, max 100)
+    //   - updatedAt: string/timestamp (required)
+    //
+    // Collection: pinterest_collection
+    // Document ID: {itemId}
+    // Fields:
+    //   - id: string (required, immutable, max 100)
+    //   - pin_url: string (required, max 1000)
+    //   - pin_title: string (required, max 500)
+    //   - pin_description: string (required, max 3000)
+    //   - category: string (required, enum)
+    //   - age_filter: string (optional, enum)
+    //   - thumbnail_url: string (required, max 2000)
+    //   - video_url: string (optional, max 2000)
+    //   - added_at: string/timestamp (required, immutable)
+    //   - notes: string (required, max 2000)
+    //   - favorite: bool (required)
+    //   - usage_permission_status: string (required, enum)
+    //   - original_creator: string (required, max 200)
+    //   - source_license: string (required, max 200)
+    //   - approval_status: string (required, enum)
+    //   - archive_status: bool (required)
+    //   - similar_pins: list (optional, max 30)
+    //   - converted_video_id: string (optional, max 100)
+    //
+    // Collection: instagram_accounts
+    // Document ID: {accountId}
+    // Fields:
+    //   - id: string (required, immutable, max 100)
+    //   - name: string (required, max 200)
+    //   - instagramUsername: string (required, max 100)
+    //   - instagramAccountId: string (required, max 100)
+    //   - facebookPageId: string (required, max 100)
+    //   - facebookPageName: string (required, max 100)
+    //   - accountType: string (required, 'BUSINESS' | 'CREATOR' | 'PERSONAL')
+    //   - isConnected: bool (required)
+    //   - isTestMode: bool (required)
+    //   - tokenExpiresAt: string/timestamp (required)
+    //   - tokenDaysRemaining: number (required, -1000 to 10000)
+    //   - lastTokenRefresh: string/timestamp (required)
+    //   - hasReelsPermission: bool (required)
+    //   - hasInsightsPermission: bool (required)
+    //   - appIdMasked: string (optional, max 100)
+    //   - appSecretMasked: string (optional, max 100)
+    //   - userAccessTokenMasked: string (optional, max 200)
+    //   - isDefault: bool (required)
+    //   - dailyTargetReels: number (required, 1 to 100)
+    //   - categoryFocus: string (optional, max 200)
+    //   - notes: string (optional, max 1000)
+    //   - createdAt: string/timestamp (required, immutable)
+    //   - updatedAt: string/timestamp (required)
+    //
+    // Collection: brand_outro_settings
+    // Document ID: config (or string id)
+    // Fields:
+    //   - isEnabled: bool (required)
+    //   - brandName: string (required, max 100)
+    //   - slogan: string (required, max 200)
+    //   - callToAction: string (required, max 100)
+    //   - profileLinkPrompt: string (required, max 200)
+    //   - logoUrl: string (required, max 2000)
+    //   - googlePlayUrl: string (required, max 1000)
+    //   - appStoreUrl: string (optional, max 1000)
+    //   - durationSeconds: number (required, 1 to 15)
+    //   - backgroundType: string (required, 'dark_gradient' | 'romantic_pink' | 'sleek_black' | 'custom_image')
+    //   - customBackgroundUrl: string (optional, max 2000)
+    //   - animationType: string (required, 'fade' | 'zoom' | 'slide_up' | 'glow')
+    //   - showBadge: bool (required)
+    //   - soundEffectEnabled: bool (required)
+    //   - updatedAt: string/timestamp (required)
+    //
+    // Collection: story_settings
+    // Document ID: {docId} (e.g. config or string id)
+    // Fields:
+    //   - isEnabled: bool (required)
+    //   - dailyPublishTime: string (required, max 20)
+    //   - storyImageUrl: string (required, max 2000)
+    //   - storyLink: string (required, max 2000)
+    //   - linkText: string (required, max 100)
+    //   - showLinkSticker: bool (required)
+    //   - selectedAccountId: string (optional, max 100)
+    //   - lastPublishedAt: string/timestamp (optional)
+    //   - nextScheduledAt: string/timestamp (optional)
+    //   - updatedAt: string/timestamp (required)
+    //
+    // Collection: story_history
+    // Document ID: {storyId}
+    // Fields:
+    //   - id: string (required, immutable, max 100)
+    //   - imageUrl: string (required, max 2000)
+    //   - storyLink: string (required, max 2000)
+    //   - linkText: string (required, max 100)
+    //   - accountId: string (required, max 100)
+    //   - accountUsername: string (required, max 100)
+    //   - publishedAt: string/timestamp (required, immutable)
+    //   - status: string (required, max 50)
+    //   - instagramStoryId: string (optional, max 100)
+    //   - errorMessage: string (optional, max 2000)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Global Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Custom Claim check (e.g. auth.token.admin == true)
+    function hasAdminClaim() {
+      return isAuthenticated() && request.auth.token.get('admin', false) == true;
+    }
+
+    // Role check from admin_users document
+    function isAdminDoc() {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/admin_users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/admin_users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Platform administrator check
+    function isAdmin() {
+      return hasAdminClaim() || isAdminDoc();
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function areImmutableFieldsUnchanged(fields) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+
+    function validString(field, minLen, maxLen) {
+      return request.resource.data[field] is string &&
+        request.resource.data[field].size() >= minLen &&
+        request.resource.data[field].size() <= maxLen;
+    }
+
+    function validOptionalString(field, minLen, maxLen) {
+      return !(field in request.resource.data) ||
+        request.resource.data[field] == null ||
+        (request.resource.data[field] is string &&
+         request.resource.data[field].size() >= minLen &&
+         request.resource.data[field].size() <= maxLen);
+    }
+
+    function validNumber(field, minVal, maxVal) {
+      return (request.resource.data[field] is int || request.resource.data[field] is float) &&
+        request.resource.data[field] >= minVal &&
+        request.resource.data[field] <= maxVal;
+    }
+
+    function validBool(field) {
+      return request.resource.data[field] is bool;
+    }
+
+    function validOptionalBool(field) {
+      return !(field in request.resource.data) ||
+        request.resource.data[field] == null ||
+        request.resource.data[field] is bool;
+    }
+
+    function validTimestampOrString(field) {
+      return request.resource.data[field] is timestamp ||
+        (request.resource.data[field] is string &&
+         request.resource.data[field].size() >= 10 &&
+         request.resource.data[field].size() <= 50);
+    }
+
+    function validOptionalTimestampOrString(field) {
+      return !(field in request.resource.data) ||
+        request.resource.data[field] == null ||
+        request.resource.data[field] is timestamp ||
+        (request.resource.data[field] is string &&
+         request.resource.data[field].size() >= 10 &&
+         request.resource.data[field].size() <= 50);
+    }
+
+    function validList(field, maxSize) {
+      return request.resource.data[field] is list &&
+        request.resource.data[field].size() <= maxSize;
+    }
+
+    function validOptionalMap(field) {
+      return !(field in request.resource.data) ||
+        request.resource.data[field] == null ||
+        request.resource.data[field] is map;
+    }
+
+    function isValidEmail(email) {
+      return email is string &&
+        email.size() >= 3 &&
+        email.size() <= 100 &&
+        email.matches('^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+[.][a-zA-Z]{2,}$');
+    }
+
+    // ===============================================================
+    // Domain Validator Functions
+    // ===============================================================
+
+    function isValidAdminUser(data) {
+      return hasOnlyAllowedFields(['email', 'role', 'displayName', 'photoURL', 'isActive', 'createdAt', 'updatedAt']) &&
+        hasRequiredFields(['email', 'role', 'createdAt', 'updatedAt']) &&
+        isValidEmail(data.email) &&
+        data.role in ['admin', 'superadmin', 'editor'] &&
+        validOptionalString('displayName', 1, 100) &&
+        validOptionalString('photoURL', 1, 2000) &&
+        validOptionalBool('isActive') &&
+        validTimestampOrString('createdAt') &&
+        validTimestampOrString('updatedAt');
+    }
+
+    function isValidInstagramSettings(data) {
+      return hasOnlyAllowedFields([
+        'isConnected', 'accountType', 'instagramAccountId', 'instagramUsername',
+        'facebookPageId', 'facebookPageName', 'tokenExpiresAt', 'tokenDaysRemaining',
+        'lastTokenRefresh', 'hasReelsPermission', 'hasInsightsPermission',
+        'appIdMasked', 'appSecretMasked', 'userAccessTokenMasked', 'isTestMode', 'updatedAt'
+      ]) &&
+      hasRequiredFields([
+        'isConnected', 'accountType', 'instagramAccountId', 'instagramUsername',
+        'facebookPageId', 'facebookPageName', 'tokenExpiresAt', 'tokenDaysRemaining',
+        'lastTokenRefresh', 'hasReelsPermission', 'hasInsightsPermission',
+        'appIdMasked', 'appSecretMasked', 'userAccessTokenMasked', 'isTestMode', 'updatedAt'
+      ]) &&
+      validBool('isConnected') &&
+      data.accountType in ['BUSINESS', 'CREATOR', 'PERSONAL'] &&
+      validString('instagramAccountId', 0, 100) &&
+      validString('instagramUsername', 0, 100) &&
+      validString('facebookPageId', 0, 100) &&
+      validString('facebookPageName', 0, 100) &&
+      validTimestampOrString('tokenExpiresAt') &&
+      validNumber('tokenDaysRemaining', -1000, 10000) &&
+      validTimestampOrString('lastTokenRefresh') &&
+      validBool('hasReelsPermission') &&
+      validBool('hasInsightsPermission') &&
+      validString('appIdMasked', 0, 100) &&
+      validString('appSecretMasked', 0, 100) &&
+      validString('userAccessTokenMasked', 0, 200) &&
+      validBool('isTestMode') &&
+      validTimestampOrString('updatedAt');
+    }
+
+    function isValidAISettings(data) {
+      return hasOnlyAllowedFields([
+        'openaiModel', 'falModels', 'selectedFalModelId',
+        'openaiApiKeyMasked', 'falApiKeyMasked', 'systemPromptBase',
+        'temperature', 'testMode', 'updatedAt'
+      ]) &&
+      hasRequiredFields([
+        'openaiModel', 'falModels', 'selectedFalModelId',
+        'openaiApiKeyMasked', 'falApiKeyMasked', 'systemPromptBase',
+        'temperature', 'testMode', 'updatedAt'
+      ]) &&
+      validString('openaiModel', 1, 100) &&
+      validList('falModels', 30) &&
+      validString('selectedFalModelId', 1, 100) &&
+      validString('openaiApiKeyMasked', 0, 100) &&
+      validString('falApiKeyMasked', 0, 100) &&
+      validString('systemPromptBase', 1, 10000) &&
+      validNumber('temperature', 0, 2) &&
+      validBool('testMode') &&
+      validTimestampOrString('updatedAt');
+    }
+
+    function isValidCostLimits(data) {
+      return hasOnlyAllowedFields([
+        'dailySpendingLimitUsd', 'monthlySpendingLimitUsd', 'maxCostPerVideoUsd',
+        'maxDailyAiVideos', 'maxDailyFfmpegVideos', 'maxDailyTotalVideos',
+        'maxRetriesPerVideo', 'circuitBreakerActive', 'todaySpentUsd',
+        'monthSpentUsd', 'todayAiVideosProduced', 'todayFfmpegVideosProduced', 'updatedAt'
+      ]) &&
+      hasRequiredFields([
+        'dailySpendingLimitUsd', 'monthlySpendingLimitUsd', 'maxCostPerVideoUsd',
+        'maxDailyAiVideos', 'maxDailyFfmpegVideos', 'maxDailyTotalVideos',
+        'maxRetriesPerVideo', 'circuitBreakerActive', 'todaySpentUsd',
+        'monthSpentUsd', 'todayAiVideosProduced', 'todayFfmpegVideosProduced', 'updatedAt'
+      ]) &&
+      validNumber('dailySpendingLimitUsd', 0, 100000) &&
+      validNumber('monthlySpendingLimitUsd', 0, 1000000) &&
+      validNumber('maxCostPerVideoUsd', 0, 1000) &&
+      validNumber('maxDailyAiVideos', 0, 1000) &&
+      validNumber('maxDailyFfmpegVideos', 0, 1000) &&
+      validNumber('maxDailyTotalVideos', 0, 2000) &&
+      validNumber('maxRetriesPerVideo', 0, 20) &&
+      validBool('circuitBreakerActive') &&
+      validNumber('todaySpentUsd', 0, 100000) &&
+      validNumber('monthSpentUsd', 0, 1000000) &&
+      validNumber('todayAiVideosProduced', 0, 1000) &&
+      validNumber('todayFfmpegVideosProduced', 0, 1000) &&
+      validTimestampOrString('updatedAt');
+    }
+
+    function isValidGeneralSettings(data) {
+      return hasOnlyAllowedFields([
+        'brandName', 'brandTagline', 'brandLogoUrl', 'watermarkEnabled',
+        'timezone', 'defaultPublishSlots', 'autoPublishEnabled',
+        'autoGenerateDailyEnabled', 'notificationEmail', 'updatedAt'
+      ]) &&
+      hasRequiredFields([
+        'brandName', 'brandTagline', 'brandLogoUrl', 'watermarkEnabled',
+        'timezone', 'defaultPublishSlots', 'autoPublishEnabled',
+        'autoGenerateDailyEnabled', 'updatedAt'
+      ]) &&
+      validString('brandName', 1, 100) &&
+      validString('brandTagline', 0, 200) &&
+      validString('brandLogoUrl', 0, 2000) &&
+      validBool('watermarkEnabled') &&
+      validString('timezone', 1, 50) &&
+      validList('defaultPublishSlots', 20) &&
+      validBool('autoPublishEnabled') &&
+      validBool('autoGenerateDailyEnabled') &&
+      validOptionalString('notificationEmail', 0, 100) &&
+      validTimestampOrString('updatedAt');
+    }
+
+    function isValidContentCategory(data) {
+      return hasOnlyAllowedFields([
+        'id', 'name', 'key', 'description', 'targetDailyCount',
+        'isActive', 'promptGuideline', 'musicMood', 'createdAt', 'updatedAt'
+      ]) &&
+      hasRequiredFields([
+        'id', 'name', 'key', 'description', 'targetDailyCount',
+        'isActive', 'promptGuideline', 'musicMood', 'createdAt', 'updatedAt'
+      ]) &&
+      validString('id', 1, 50) &&
+      validString('name', 1, 200) &&
+      data.key in ['romantic_cinematic', 'realistic_selfie', 'relationship_advice', 'app_promo', 'viral_story'] &&
+      validString('description', 0, 1000) &&
+      validNumber('targetDailyCount', 0, 100) &&
+      validBool('isActive') &&
+      validString('promptGuideline', 0, 5000) &&
+      validString('musicMood', 0, 500) &&
+      validTimestampOrString('createdAt') &&
+      validTimestampOrString('updatedAt');
+    }
+
+    function isValidContentIdea(data) {
+      return hasOnlyAllowedFields([
+        'id', 'categoryId', 'categoryKey', 'title', 'scenario',
+        'sceneDescription', 'generationPrompt', 'turkishSubtitles',
+        'caption', 'hashtags', 'coverPrompt', 'status',
+        'repetitionCheckHash', 'createdAt', 'updatedAt'
+      ]) &&
+      hasRequiredFields([
+        'id', 'categoryId', 'categoryKey', 'title', 'scenario',
+        'sceneDescription', 'generationPrompt', 'turkishSubtitles',
+        'caption', 'hashtags', 'coverPrompt', 'status',
+        'repetitionCheckHash', 'createdAt', 'updatedAt'
+      ]) &&
+      validString('id', 1, 50) &&
+      validString('categoryId', 1, 50) &&
+      data.categoryKey in ['romantic_cinematic', 'realistic_selfie', 'relationship_advice', 'app_promo', 'viral_story'] &&
+      validString('title', 1, 300) &&
+      validString('scenario', 0, 5000) &&
+      validString('sceneDescription', 0, 5000) &&
+      validString('generationPrompt', 0, 5000) &&
+      validList('turkishSubtitles', 100) &&
+      validString('caption', 0, 3000) &&
+      validList('hashtags', 50) &&
+      validString('coverPrompt', 0, 2000) &&
+      data.status in ['draft', 'approved', 'producing', 'completed', 'rejected'] &&
+      validString('repetitionCheckHash', 0, 100) &&
+      validTimestampOrString('createdAt') &&
+      validTimestampOrString('updatedAt');
+    }
+
+    function isValidGeneratedVideo(data) {
+      return hasOnlyAllowedFields([
+        'id', 'ideaId', 'title', 'categoryKey', 'productionType',
+        'videoUrl', 'thumbnailUrl', 'durationSeconds', 'width', 'height',
+        'fps', 'format', 'aspectRatio', 'caption', 'hashtags',
+        'subtitlesApplied', 'logoApplied', 'costUsd', 'modelUsed',
+        'status', 'errorMessage', 'retryCount', 'instagramMediaId',
+        'instagramPermalink', 'publishedAt', 'createdAt', 'updatedAt'
+      ]) &&
+      hasRequiredFields([
+        'id', 'title', 'categoryKey', 'productionType',
+        'videoUrl', 'thumbnailUrl', 'durationSeconds', 'width', 'height',
+        'fps', 'format', 'aspectRatio', 'caption', 'hashtags',
+        'subtitlesApplied', 'logoApplied', 'costUsd', 'status',
+        'retryCount', 'createdAt', 'updatedAt'
+      ]) &&
+      validString('id', 1, 50) &&
+      validOptionalString('ideaId', 0, 50) &&
+      validString('title', 1, 300) &&
+      data.categoryKey in ['romantic_cinematic', 'realistic_selfie', 'relationship_advice', 'app_promo', 'viral_story'] &&
+      data.productionType in ['ai_video', 'ffmpeg_motion'] &&
+      validString('videoUrl', 0, 2000) &&
+      validString('thumbnailUrl', 0, 2000) &&
+      validNumber('durationSeconds', 0, 600) &&
+      validNumber('width', 0, 4096) &&
+      validNumber('height', 0, 4096) &&
+      validNumber('fps', 0, 120) &&
+      validString('format', 1, 20) &&
+      validString('aspectRatio', 1, 20) &&
+      validString('caption', 0, 3000) &&
+      validList('hashtags', 50) &&
+      validBool('subtitlesApplied') &&
+      validBool('logoApplied') &&
+      validNumber('costUsd', 0, 1000) &&
+      validOptionalString('modelUsed', 0, 100) &&
+      data.status in ['queued', 'rendering', 'ready', 'published', 'failed'] &&
+      validOptionalString('errorMessage', 0, 1000) &&
+      validNumber('retryCount', 0, 100) &&
+      validOptionalString('instagramMediaId', 0, 100) &&
+      validOptionalString('instagramPermalink', 0, 1000) &&
+      validOptionalTimestampOrString('publishedAt') &&
+      validTimestampOrString('createdAt') &&
+      validTimestampOrString('updatedAt');
+    }
+
+    function isValidPublishQueueItem(data) {
+      return hasOnlyAllowedFields([
+        'id', 'videoId', 'videoTitle', 'thumbnailUrl', 'scheduledTime',
+        'slotLabel', 'status', 'attempts', 'maxAttempts', 'lastAttemptAt',
+        'instagramContainerId', 'instagramMediaId', 'instagramPermalink',
+        'errorMessage', 'createdAt', 'updatedAt'
+      ]) &&
+      hasRequiredFields([
+        'id', 'videoId', 'videoTitle', 'thumbnailUrl', 'scheduledTime',
+        'slotLabel', 'status', 'attempts', 'maxAttempts', 'createdAt', 'updatedAt'
+      ]) &&
+      validString('id', 1, 50) &&
+      validString('videoId', 0, 100) &&
+      validString('videoTitle', 0, 300) &&
+      validString('thumbnailUrl', 0, 2000) &&
+      validTimestampOrString('scheduledTime') &&
+      validString('slotLabel', 0, 100) &&
+      data.status in ['pending', 'processing', 'published', 'failed', 'cancelled'] &&
+      validNumber('attempts', 0, 100) &&
+      validNumber('maxAttempts', 1, 100) &&
+      validOptionalTimestampOrString('lastAttemptAt') &&
+      validOptionalString('instagramContainerId', 0, 100) &&
+      validOptionalString('instagramMediaId', 0, 100) &&
+      validOptionalString('instagramPermalink', 0, 1000) &&
+      validOptionalString('errorMessage', 0, 1000) &&
+      validTimestampOrString('createdAt') &&
+      validTimestampOrString('updatedAt');
+    }
+
+    function isValidPublishHistoryItem(data) {
+      return hasOnlyAllowedFields([
+        'id', 'videoId', 'queueItemId', 'instagramMediaId', 'permalink',
+        'publishedAt', 'caption', 'likes', 'comments', 'views', 'reach', 'lastStatsSyncAt'
+      ]) &&
+      hasRequiredFields([
+        'id', 'videoId', 'queueItemId', 'instagramMediaId', 'permalink',
+        'publishedAt', 'caption', 'likes', 'comments', 'views', 'reach'
+      ]) &&
+      validString('id', 1, 50) &&
+      validString('videoId', 1, 100) &&
+      validString('queueItemId', 0, 100) &&
+      validString('instagramMediaId', 1, 100) &&
+      validString('permalink', 0, 1000) &&
+      validTimestampOrString('publishedAt') &&
+      validString('caption', 0, 3000) &&
+      validNumber('likes', 0, 100000000) &&
+      validNumber('comments', 0, 100000000) &&
+      validNumber('views', 0, 1000000000) &&
+      validNumber('reach', 0, 1000000000) &&
+      validOptionalTimestampOrString('lastStatsSyncAt');
+    }
+
+    function isValidDailyStatistics(data) {
+      return hasOnlyAllowedFields([
+        'id', 'date', 'producedCount', 'publishedCount', 'failedCount',
+        'pendingCount', 'totalCostUsd', 'instagramViews', 'instagramLikes',
+        'instagramComments', 'targetDailyCount', 'completionRatePercent', 'updatedAt'
+      ]) &&
+      hasRequiredFields([
+        'id', 'date', 'producedCount', 'publishedCount', 'failedCount',
+        'pendingCount', 'totalCostUsd', 'instagramViews', 'instagramLikes',
+        'instagramComments', 'targetDailyCount', 'completionRatePercent', 'updatedAt'
+      ]) &&
+      validString('id', 1, 50) &&
+      validString('date', 1, 20) &&
+      validNumber('producedCount', 0, 10000) &&
+      validNumber('publishedCount', 0, 10000) &&
+      validNumber('failedCount', 0, 10000) &&
+      validNumber('pendingCount', 0, 10000) &&
+      validNumber('totalCostUsd', 0, 100000) &&
+      validNumber('instagramViews', 0, 1000000000) &&
+      validNumber('instagramLikes', 0, 100000000) &&
+      validNumber('instagramComments', 0, 100000000) &&
+      validNumber('targetDailyCount', 0, 1000) &&
+      validNumber('completionRatePercent', 0, 1000) &&
+      validTimestampOrString('updatedAt');
+    }
+
+    function isValidApiUsageRecord(data) {
+      return hasOnlyAllowedFields([
+        'id', 'provider', 'endpoint', 'unitsUsed', 'unitType',
+        'costUsd', 'durationMs', 'status', 'errorMessage',
+        'relatedVideoId', 'timestamp'
+      ]) &&
+      hasRequiredFields([
+        'id', 'provider', 'endpoint', 'unitsUsed', 'unitType',
+        'costUsd', 'durationMs', 'status', 'timestamp'
+      ]) &&
+      validString('id', 1, 50) &&
+      data.provider in ['openai', 'fal_ai', 'meta_instagram'] &&
+      validString('endpoint', 1, 200) &&
+      validNumber('unitsUsed', 0, 100000000) &&
+      data.unitType in ['tokens', 'seconds', 'call'] &&
+      validNumber('costUsd', 0, 10000) &&
+      validNumber('durationMs', 0, 1000000) &&
+      data.status in ['success', 'error'] &&
+      validOptionalString('errorMessage', 0, 1000) &&
+      validOptionalString('relatedVideoId', 0, 100) &&
+      validTimestampOrString('timestamp');
+    }
+
+    function isValidSystemLogRecord(data) {
+      return hasOnlyAllowedFields([
+        'id', 'level', 'module', 'action', 'message', 'details', 'timestamp'
+      ]) &&
+      hasRequiredFields([
+        'id', 'level', 'module', 'action', 'message', 'timestamp'
+      ]) &&
+      validString('id', 1, 50) &&
+      data.level in ['INFO', 'WARN', 'ERROR'] &&
+      data.module in ['AUTH', 'AI_CONTENT', 'FAL_AI', 'FFMPEG', 'INSTAGRAM', 'SCHEDULER', 'COST_GUARD', 'SYSTEM'] &&
+      validString('action', 1, 100) &&
+      validString('message', 1, 2000) &&
+      validOptionalMap('details') &&
+      validTimestampOrString('timestamp');
+    }
+
+    function isValidPinterestItem(data) {
+      return hasOnlyAllowedFields([
+        'id', 'pin_url', 'pin_title', 'pin_description', 'category',
+        'age_filter', 'thumbnail_url', 'video_url', 'added_at',
+        'notes', 'favorite', 'usage_permission_status', 'original_creator',
+        'source_license', 'approval_status', 'archive_status',
+        'similar_pins', 'converted_video_id'
+      ]) &&
+      hasRequiredFields([
+        'id', 'pin_url', 'pin_title', 'pin_description', 'category',
+        'thumbnail_url', 'added_at', 'notes', 'favorite',
+        'usage_permission_status', 'original_creator', 'source_license',
+        'approval_status', 'archive_status'
+      ]) &&
+      validString('id', 1, 100) &&
+      validString('pin_url', 1, 1000) &&
+      validString('pin_title', 0, 500) &&
+      validString('pin_description', 0, 3000) &&
+      data.category in [
+        'Sahil ve deniz', 'Tatil ve gezi', 'Günlük yaşam', 'Moda ve kombin',
+        'Başörtülü kadınlar', 'Başörtüsüz kadınlar', 'Park ve doğa',
+        'Şehir yürüyüşleri', 'Romantik görüntüler', 'Kadın ve erkek çiftler'
+      ] &&
+      (
+        !('age_filter' in data) || data.age_filter == null ||
+        (data.age_filter is string && data.age_filter in [
+          '25–30 yaş görünümü', '30–35 yaş görünümü', '35–45 yaş görünümü',
+          '25-30 yaş görünümü', '30-35 yaş görünümü', '35-45 yaş görünümü'
+        ])
+      ) &&
+      validString('thumbnail_url', 0, 2000) &&
+      validOptionalString('video_url', 0, 2000) &&
+      validTimestampOrString('added_at') &&
+      validString('notes', 0, 2000) &&
+      validBool('favorite') &&
+      data.usage_permission_status in [
+        'İzin bekleniyor', 'Kullanım izni doğrulandı', 'Ticari kullanım uygun',
+        'Kullanım izni yok', 'Manuel kontrol gerekli'
+      ] &&
+      validString('original_creator', 0, 200) &&
+      validString('source_license', 0, 200) &&
+      data.approval_status in ['Onaylandı', 'Beklemede', 'Reddedildi'] &&
+      validBool('archive_status') &&
+      (
+        !('similar_pins' in data) || data.similar_pins == null ||
+        (data.similar_pins is list && data.similar_pins.size() <= 30)
+      ) &&
+      validOptionalString('converted_video_id', 0, 100);
+    }
+
+    function isValidInstagramAccount(data) {
+      return hasOnlyAllowedFields([
+        'id', 'name', 'instagramUsername', 'instagramAccountId',
+        'facebookPageId', 'facebookPageName', 'accountType',
+        'isConnected', 'isTestMode', 'tokenExpiresAt', 'tokenDaysRemaining',
+        'lastTokenRefresh', 'hasReelsPermission', 'hasInsightsPermission',
+        'appIdMasked', 'appSecretMasked', 'userAccessTokenMasked',
+        'isDefault', 'dailyTargetReels', 'categoryFocus', 'notes',
+        'createdAt', 'updatedAt'
+      ]) &&
+      hasRequiredFields([
+        'id', 'name', 'instagramUsername', 'instagramAccountId',
+        'facebookPageId', 'facebookPageName', 'accountType',
+        'isConnected', 'isTestMode', 'tokenExpiresAt', 'tokenDaysRemaining',
+        'lastTokenRefresh', 'hasReelsPermission', 'hasInsightsPermission',
+        'isDefault', 'dailyTargetReels', 'createdAt', 'updatedAt'
+      ]) &&
+      validString('id', 1, 100) &&
+      validString('name', 1, 200) &&
+      validString('instagramUsername', 0, 100) &&
+      validString('instagramAccountId', 0, 100) &&
+      validString('facebookPageId', 0, 100) &&
+      validString('facebookPageName', 0, 100) &&
+      data.accountType in ['BUSINESS', 'CREATOR', 'PERSONAL'] &&
+      validBool('isConnected') &&
+      validBool('isTestMode') &&
+      validTimestampOrString('tokenExpiresAt') &&
+      validNumber('tokenDaysRemaining', -1000, 10000) &&
+      validTimestampOrString('lastTokenRefresh') &&
+      validBool('hasReelsPermission') &&
+      validBool('hasInsightsPermission') &&
+      validOptionalString('appIdMasked', 0, 100) &&
+      validOptionalString('appSecretMasked', 0, 100) &&
+      validOptionalString('userAccessTokenMasked', 0, 200) &&
+      validBool('isDefault') &&
+      validNumber('dailyTargetReels', 1, 100) &&
+      validOptionalString('categoryFocus', 0, 200) &&
+      validOptionalString('notes', 0, 1000) &&
+      validTimestampOrString('createdAt') &&
+      validTimestampOrString('updatedAt');
+    }
+
+    function isValidBrandOutroSettings(data) {
+      return hasOnlyAllowedFields([
+        'isEnabled', 'brandName', 'slogan', 'callToAction', 'profileLinkPrompt',
+        'logoUrl', 'googlePlayUrl', 'appStoreUrl', 'durationSeconds',
+        'backgroundType', 'customBackgroundUrl', 'animationType', 'showBadge',
+        'soundEffectEnabled', 'updatedAt'
+      ]) &&
+      hasRequiredFields([
+        'isEnabled', 'brandName', 'slogan', 'callToAction', 'profileLinkPrompt',
+        'logoUrl', 'googlePlayUrl', 'durationSeconds', 'backgroundType',
+        'animationType', 'showBadge', 'soundEffectEnabled', 'updatedAt'
+      ]) &&
+      validBool('isEnabled') &&
+      validString('brandName', 1, 100) &&
+      validString('slogan', 1, 200) &&
+      validString('callToAction', 1, 100) &&
+      validString('profileLinkPrompt', 1, 200) &&
+      validString('logoUrl', 1, 2000) &&
+      validString('googlePlayUrl', 0, 1000) &&
+      validOptionalString('appStoreUrl', 0, 1000) &&
+      validNumber('durationSeconds', 1, 15) &&
+      data.backgroundType in ['dark_gradient', 'romantic_pink', 'sleek_black', 'custom_image'] &&
+      validOptionalString('customBackgroundUrl', 0, 2000) &&
+      data.animationType in ['fade', 'zoom', 'slide_up', 'glow'] &&
+      validBool('showBadge') &&
+      validBool('soundEffectEnabled') &&
+      validTimestampOrString('updatedAt');
+    }
+
+    function isValidStorySettings(data) {
+      return hasOnlyAllowedFields([
+        'isEnabled', 'dailyPublishTime', 'storyImageUrl', 'storyLink', 'linkText',
+        'showLinkSticker', 'selectedAccountId', 'lastPublishedAt', 'nextScheduledAt',
+        'updatedAt'
+      ]) &&
+      hasRequiredFields([
+        'isEnabled', 'dailyPublishTime', 'storyImageUrl', 'storyLink', 'linkText',
+        'showLinkSticker', 'updatedAt'
+      ]) &&
+      validBool('isEnabled') &&
+      validString('dailyPublishTime', 1, 20) &&
+      validString('storyImageUrl', 0, 2000) &&
+      validString('storyLink', 0, 2000) &&
+      validString('linkText', 0, 100) &&
+      validBool('showLinkSticker') &&
+      validOptionalString('selectedAccountId', 0, 100) &&
+      validOptionalTimestampOrString('lastPublishedAt') &&
+      validOptionalTimestampOrString('nextScheduledAt') &&
+      validTimestampOrString('updatedAt');
+    }
+
+    function isValidStoryHistoryItem(data) {
+      return hasOnlyAllowedFields([
+        'id', 'imageUrl', 'storyLink', 'linkText', 'accountId',
+        'accountUsername', 'publishedAt', 'status', 'instagramStoryId',
+        'errorMessage'
+      ]) &&
+      hasRequiredFields([
+        'id', 'imageUrl', 'storyLink', 'linkText', 'accountId',
+        'accountUsername', 'publishedAt', 'status'
+      ]) &&
+      validString('id', 1, 100) &&
+      validString('imageUrl', 0, 2000) &&
+      validString('storyLink', 0, 2000) &&
+      validString('linkText', 0, 100) &&
+      validString('accountId', 0, 100) &&
+      validString('accountUsername', 0, 100) &&
+      validTimestampOrString('publishedAt') &&
+      validString('status', 1, 50) &&
+      validOptionalString('instagramStoryId', 0, 100) &&
+      validOptionalString('errorMessage', 0, 2000);
+    }
+
+    // ===============================================================
+    // Root Default Deny
+    // ===============================================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ===============================================================
+    // 1. admin_users
+    // ===============================================================
+    match /admin_users/{userId} {
+      // Users can only read their own profile doc or admins can list all
+      allow read: if isAdmin() || isOwner(userId);
+      // Only an authorized admin can create, update or delete admin accounts
+      allow create: if isAdmin() && isValidAdminUser(request.resource.data);
+      allow update: if isAdmin() && isValidAdminUser(request.resource.data) &&
+                    areImmutableFieldsUnchanged(['createdAt']);
+      allow delete: if isAdmin();
+    }
+
+    // ===============================================================
+    // 2. instagram_settings
+    // ===============================================================
+    match /instagram_settings/{docId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && isValidInstagramSettings(request.resource.data);
+      allow update: if isAdmin() && isValidInstagramSettings(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // ===============================================================
+    // 3. ai_settings
+    // ===============================================================
+    match /ai_settings/{docId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && isValidAISettings(request.resource.data);
+      allow update: if isAdmin() && isValidAISettings(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // ===============================================================
+    // 4. content_categories
+    // ===============================================================
+    match /content_categories/{catId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && isValidContentCategory(request.resource.data);
+      allow update: if isAdmin() && isValidContentCategory(request.resource.data) &&
+                    areImmutableFieldsUnchanged(['id', 'createdAt']);
+      allow delete: if isAdmin();
+    }
+
+    // ===============================================================
+    // 5. content_ideas
+    // ===============================================================
+    match /content_ideas/{ideaId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && isValidContentIdea(request.resource.data);
+      allow update: if isAdmin() && isValidContentIdea(request.resource.data) &&
+                    areImmutableFieldsUnchanged(['id', 'createdAt']);
+      allow delete: if isAdmin();
+    }
+
+    // ===============================================================
+    // 6. generated_videos
+    // ===============================================================
+    match /generated_videos/{videoId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && isValidGeneratedVideo(request.resource.data);
+      allow update: if isAdmin() && isValidGeneratedVideo(request.resource.data) &&
+                    areImmutableFieldsUnchanged(['id', 'createdAt']);
+      allow delete: if isAdmin();
+    }
+
+    // ===============================================================
+    // 7. publish_queue
+    // ===============================================================
+    match /publish_queue/{queueId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && isValidPublishQueueItem(request.resource.data);
+      allow update: if isAdmin() && isValidPublishQueueItem(request.resource.data) &&
+                    areImmutableFieldsUnchanged(['id', 'createdAt']);
+      allow delete: if isAdmin();
+    }
+
+    // ===============================================================
+    // 8. publish_history
+    // ===============================================================
+    match /publish_history/{historyId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && isValidPublishHistoryItem(request.resource.data);
+      allow update: if isAdmin() && isValidPublishHistoryItem(request.resource.data) &&
+                    areImmutableFieldsUnchanged(['id']);
+      allow delete: if isAdmin();
+    }
+
+    // ===============================================================
+    // 9. daily_statistics
+    // ===============================================================
+    match /daily_statistics/{statId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && isValidDailyStatistics(request.resource.data);
+      allow update: if isAdmin() && isValidDailyStatistics(request.resource.data) &&
+                    areImmutableFieldsUnchanged(['id', 'date']);
+      allow delete: if isAdmin();
+    }
+
+    // ===============================================================
+    // 10. api_usage
+    // ===============================================================
+    match /api_usage/{usageId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && isValidApiUsageRecord(request.resource.data);
+      allow update: if isAdmin() && isValidApiUsageRecord(request.resource.data) &&
+                    areImmutableFieldsUnchanged(['id', 'timestamp']);
+      allow delete: if isAdmin();
+    }
+
+    // ===============================================================
+    // 11. system_logs (Immutable audit trail)
+    // ===============================================================
+    match /system_logs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && isValidSystemLogRecord(request.resource.data);
+      allow update: if false; // Audit logs cannot be modified
+      allow delete: if isAdmin();
+    }
+
+    // ===============================================================
+    // 12. cost_limits
+    // ===============================================================
+    match /cost_limits/{docId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && isValidCostLimits(request.resource.data);
+      allow update: if isAdmin() && isValidCostLimits(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // ===============================================================
+    // 13. general_settings
+    // ===============================================================
+    match /general_settings/{docId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && isValidGeneralSettings(request.resource.data);
+      allow update: if isAdmin() && isValidGeneralSettings(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // ===============================================================
+    // 14. pinterest_collection
+    // ===============================================================
+    match /pinterest_collection/{itemId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && isValidPinterestItem(request.resource.data);
+      allow update: if isAdmin() && isValidPinterestItem(request.resource.data) &&
+                    areImmutableFieldsUnchanged(['id', 'added_at']);
+      allow delete: if isAdmin();
+    }
+
+    // ===============================================================
+    // 15. instagram_accounts
+    // ===============================================================
+    match /instagram_accounts/{accountId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && isValidInstagramAccount(request.resource.data);
+      allow update: if isAdmin() && isValidInstagramAccount(request.resource.data) &&
+                    areImmutableFieldsUnchanged(['id', 'createdAt']);
+      allow delete: if isAdmin();
+    }
+
+    // ===============================================================
+    // 16. brand_outro_settings
+    // ===============================================================
+    match /brand_outro_settings/{docId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && isValidBrandOutroSettings(request.resource.data);
+      allow update: if isAdmin() && isValidBrandOutroSettings(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // ===============================================================
+    // 17. story_settings
+    // ===============================================================
+    match /story_settings/{docId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && isValidStorySettings(request.resource.data);
+      allow update: if isAdmin() && isValidStorySettings(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // ===============================================================
+    // 18. story_history
+    // ===============================================================
+    match /story_history/{storyId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && isValidStoryHistoryItem(request.resource.data);
+      allow update: if isAdmin() && isValidStoryHistoryItem(request.resource.data) &&
+                    areImmutableFieldsUnchanged(['id', 'publishedAt']);
+      allow delete: if isAdmin();
+    }
+  }
+}

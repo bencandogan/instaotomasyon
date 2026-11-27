@@ -1,0 +1,23 @@
+# Google Cloud Run - FFmpeg Video Montaj Motoru Container
+FROM node:20-bookworm-slim
+
+# FFmpeg ve ses/video fontlarını kur
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    fonts-freefont-ttf \
+    fonts-dejavu-core \
+    curl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Sadece worker için gereken scripti ve package.json kopyala
+COPY scripts/cloud_run_montage_worker.js ./scripts/cloud_run_montage_worker.js
+
+ENV PORT=8080
+ENV NODE_ENV=production
+
+EXPOSE 8080
+
+CMD ["node", "scripts/cloud_run_montage_worker.js"]

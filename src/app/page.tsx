@@ -1,0 +1,1257 @@
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import {
+  Menu,
+  X,
+  Bell,
+  Sparkles,
+  RefreshCw,
+  CheckCircle2,
+  AlertTriangle,
+  Clock,
+  ShieldCheck,
+  ChevronRight,
+  ChevronDown,
+  UserCheck,
+  Plus,
+  Check
+} from 'lucide-react';
+import { InstagramIcon } from '@/components/icons/InstagramIcon';
+import { NAV_ITEMS, NavTab } from '@/components/dashboard/navItems';
+import { OverviewView } from '@/components/dashboard/OverviewView';
+import { AIGeneratorView } from '@/components/dashboard/AIGeneratorView';
+import { PinterestFinderView } from '@/components/dashboard/PinterestFinderView';
+import { BrandOutroSettingsView } from '@/components/dashboard/BrandOutroSettingsView';
+import { StoryAutomationView } from '@/components/dashboard/StoryAutomationView';
+import { VideoLibraryView } from '@/components/dashboard/VideoLibraryView';
+import { ScheduleView } from '@/components/dashboard/ScheduleView';
+import { InstagramAccountView } from '@/components/dashboard/InstagramAccountView';
+import { CategoriesView } from '@/components/dashboard/CategoriesView';
+import { AIModelsView } from '@/components/dashboard/AIModelsView';
+import { IntegrationsView } from '@/components/dashboard/IntegrationsView';
+import { CostManagementView } from '@/components/dashboard/CostManagementView';
+import { StatisticsView } from '@/components/dashboard/StatisticsView';
+import { LogsView } from '@/components/dashboard/LogsView';
+import { GeneralSettingsView } from '@/components/dashboard/GeneralSettingsView';
+import {
+  ContentCategory,
+  ContentIdea,
+  GeneratedVideo,
+  PublishQueueItem,
+  InstagramSettings,
+  AISettings,
+  CostAndUsageLimits,
+  GeneralSettings,
+  SystemLogRecord,
+  ApiUsageRecord,
+  VideoCategoryType,
+  PublishSlot,
+  PinterestItem,
+  PinterestCategory,
+  PinterestAgeFilter,
+  InstagramAccount,
+  BrandOutroSettings,
+  StoryAutomationSettings,
+  StoryPublishItem,
+} from '@/types';
+
+export default function AdminDashboardPage() {
+  const [activeTab, setActiveTab] = useState<NavTab>('overview');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
+
+  // Live State
+  const [stats, setStats] = useState<any>(null);
+  const [categories, setCategories] = useState<ContentCategory[]>([]);
+  const [ideas, setIdeas] = useState<ContentIdea[]>([]);
+  const [videos, setVideos] = useState<GeneratedVideo[]>([]);
+  const [queue, setQueue] = useState<PublishQueueItem[]>([]);
+  const [instagramSettings, setInstagramSettings] = useState<InstagramSettings | null>(null);
+  const [aiSettings, setAiSettings] = useState<AISettings | null>(null);
+  const [costLimits, setCostLimits] = useState<CostAndUsageLimits | null>(null);
+  const [apiUsage, setApiUsage] = useState<ApiUsageRecord[]>([]);
+  const [generalSettings, setGeneralSettings] = useState<GeneralSettings | null>(null);
+  const [logs, setLogs] = useState<SystemLogRecord[]>([]);
+  const [pinterestItems, setPinterestItems] = useState<PinterestItem[]>([]);
+  const [brandOutroSettings, setBrandOutroSettings] = useState<BrandOutroSettings | null>(null);
+  const [storySettings, setStorySettings] = useState<StoryAutomationSettings | null>(null);
+  const [storyHistory, setStoryHistory] = useState<StoryPublishItem[]>([]);
+  const [accounts, setAccounts] = useState<InstagramAccount[]>([]);
+  const [activeAccount, setActiveAccount] = useState<InstagramAccount | null>(null);
+  const [accountDropdownOpen, setAccountDropdownOpen] = useState(false);
+
+  const showToast = (type: 'success' | 'error' | 'info', message: string) => {
+    setToast({ type, message });
+    setTimeout(() => setToast(null), 4000);
+  };
+
+  // Load All Initial Data
+  const loadAllData = async () => {
+    try {
+      const [
+        statsRes,
+        catRes,
+        videosRes,
+        queueRes,
+        instaRes,
+        aiRes,
+        costRes,
+        genRes,
+        logsRes,
+        pinRes,
+        accountsRes,
+        outroRes,
+        storyRes,
+      ] = await Promise.all([
+        fetch('/api/stats').then((r) => r.json()),
+        fetch('/api/categories').then((r) => r.json()),
+        fetch('/api/video/render').then((r) => r.json()),
+        fetch('/api/queue').then((r) => r.json()),
+        fetch('/api/instagram/status').then((r) => r.json()),
+        fetch('/api/settings/ai').then((r) => r.json()),
+        fetch('/api/settings/cost').then((r) => r.json()),
+        fetch('/api/settings/general').then((r) => r.json()),
+        fetch('/api/logs?limit=50').then((r) => r.json()),
+        fetch('/api/pinterest/items').then((r) => r.json()),
+        fetch('/api/instagram/accounts').then((r) => r.json()),
+        fetch('/api/settings/brand-outro').then((r) => r.json()),
+        fetch('/api/instagram/story').then((r) => r.json()),
+      ]);
+
+      if (statsRes?.stats) setStats(statsRes.stats);
+      if (catRes?.categories) setCategories(catRes.categories);
+      if (videosRes?.videos) setVideos(videosRes.videos);
+      if (queueRes?.queue) setQueue(queueRes.queue);
+      if (instaRes?.settings) setInstagramSettings(instaRes.settings);
+      if (accountsRes?.accounts) {
+        setAccounts(accountsRes.accounts);
+        setActiveAccount(accountsRes.activeAccount || accountsRes.accounts[0] || null);
+      }
+      if (outroRes?.settings) setBrandOutroSettings(outroRes.settings);
+      if (storyRes?.settings) setStorySettings(storyRes.settings);
+      if (storyRes?.history) setStoryHistory(storyRes.history);
+      if (aiRes?.settings) setAiSettings(aiRes.settings);
+      if (costRes?.limits) {
+        setCostLimits(costRes.limits);
+        setApiUsage(costRes.apiUsage || []);
+      }
+      if (genRes?.general) setGeneralSettings(genRes.general);
+      if (logsRes?.logs) setLogs(logsRes.logs);
+      if (pinRes?.items) setPinterestItems(pinRes.items);
+    } catch (e) {
+      console.error('Veri yükleme hatası:', e);
+    }
+  };
+
+  useEffect(() => {
+    loadAllData();
+
+    // Autopilot 45 saniyede bir arka planda otonom kontrol yapar
+    const autoInterval = setInterval(async () => {
+      try {
+        const tickRes = await fetch('/api/autopilot', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'tick' }),
+        });
+        const tickData = await tickRes.json();
+        if (tickData?.publishedReelsCount > 0 || tickData?.storyPublished || tickData?.replenishedReelsCount > 0) {
+          loadAllData();
+          if (tickData.publishedReelsCount > 0) {
+            showToast('info', `🤖 Autopilot: ${tickData.publishedReelsCount} adet Reels zamanında otomatik yayınlandı.`);
+          }
+          if (tickData.storyPublished) {
+            showToast('info', '🤖 Autopilot: 24 saatlik Story otomatik yayınlandı.');
+          }
+          if (tickData.replenishedReelsCount > 0) {
+            showToast('info', `🤖 Autopilot: Pinterest havuzundan ${tickData.replenishedReelsCount} yeni video kuyruğa eklendi.`);
+          }
+        }
+      } catch {}
+    }, 45000);
+
+    return () => clearInterval(autoInterval);
+  }, []);
+
+  // Action: Generate Single Idea
+  const handleGenerateSingle = async (categoryKey: VideoCategoryType, topic?: string) => {
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/content/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ categoryKey, customTopic: topic }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      setIdeas((prev) => [data.idea, ...prev]);
+      showToast('success', `"${data.idea.title}" senaryosu başarıyla üretildi.`);
+      loadAllData();
+      return data.idea;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast('error', `İçerik üretilemedi: ${msg}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Action: Generate Daily 5 Batch
+  const handleGenerateBatch = async () => {
+    setIsLoading(true);
+    try {
+      showToast('info', 'Günün 5 farklı Reels senaryosu hazırlanıyor...');
+      const res = await fetch('/api/content/batch', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      setIdeas((prev) => [...data.ideas, ...prev]);
+      showToast('success', '5 farklı kategori için Reels senaryoları hazırlandı!');
+      loadAllData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast('error', `Toplu üretim hatası: ${msg}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Action: Render Video (fal.ai or FFmpeg)
+  const handleRenderVideo = async (idea: ContentIdea, productionType: 'ai_video' | 'ffmpeg_motion') => {
+    setIsLoading(true);
+    try {
+      showToast('info', `Video render ediliyor (${productionType === 'ai_video' ? 'fal.ai AI Video' : 'FFmpeg Motion'})...`);
+      const res = await fetch('/api/video/render', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ideaId: idea.id,
+          title: idea.title,
+          categoryKey: idea.categoryKey,
+          prompt: idea.generationPrompt,
+          productionType,
+          durationSeconds: 10,
+          caption: idea.caption,
+          hashtags: idea.hashtags,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      setVideos((prev) => [data.video, ...prev]);
+      showToast('success', `"${data.video.title}" videosu başarıyla oluşturuldu!`);
+      setActiveTab('video-library');
+      loadAllData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast('error', `Video üretimi başarısız: ${msg}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Action: Publish Video Now
+  const handlePublishNow = async (videoId: string) => {
+    setIsLoading(true);
+    try {
+      showToast('info', 'Instagram Reels container hazırlanıyor ve yayınlanıyor...');
+      const res = await fetch('/api/instagram/publish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ videoId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      showToast('success', 'Video başarıyla Instagram Reels olarak paylaşıldı!');
+      loadAllData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast('error', `Instagram paylaşım hatası: ${msg}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Action: Add Video to Queue
+  const handleAddToQueue = async (videoId: string, scheduledTime: string, slotLabel: string) => {
+    try {
+      const res = await fetch('/api/queue', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ videoId, scheduledTime, slotLabel }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      showToast('success', `Video ${slotLabel} slotuna eklendi.`);
+      loadAllData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast('error', `Kuyruğa eklenemedi: ${msg}`);
+    }
+  };
+
+  // Action: Update Video
+  const handleUpdateVideo = async (videoId: string, updates: Partial<GeneratedVideo>) => {
+    try {
+      const res = await fetch(`/api/video/${videoId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      showToast('success', 'Video bilgileri güncellendi.');
+      loadAllData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast('error', `Güncelleme hatası: ${msg}`);
+    }
+  };
+
+  // Action: Delete Video
+  const handleDeleteVideo = async (videoId: string) => {
+    if (!confirm('Bu videoyu silmek istediğinize emin misiniz?')) return;
+    try {
+      const res = await fetch(`/api/video/${videoId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Silinemedi');
+      setVideos((prev) => prev.filter((v) => v.id !== videoId));
+      showToast('info', 'Video silindi.');
+      loadAllData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast('error', `Silme hatası: ${msg}`);
+    }
+  };
+
+  // Action: Save Cost Limits
+  const handleSaveCostLimits = async (limits: Partial<CostAndUsageLimits>) => {
+    try {
+      const res = await fetch('/api/settings/cost', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(limits),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setCostLimits(data.limits);
+      showToast('success', 'Maliyet limitleri güncellendi.');
+      loadAllData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast('error', `Limit kaydetme hatası: ${msg}`);
+    }
+  };
+
+  // Action: Save Instagram Settings
+  const handleSaveInstagramSettings = async (settings: Partial<InstagramSettings>) => {
+    try {
+      const res = await fetch('/api/instagram/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setInstagramSettings(data.settings);
+      showToast('success', 'Instagram ayarları kaydedildi.');
+      loadAllData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast('error', `Instagram ayarları kaydedilemedi: ${msg}`);
+    }
+  };
+
+  // Action: Multi-Account Management
+  const handleAddInstagramAccount = async (accountData: Partial<InstagramAccount>) => {
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/instagram/accounts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(accountData),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      showToast('success', `"${data.account.name}" hesabı başarıyla eklendi.`);
+      loadAllData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast('error', `Hesap ekleme hatası: ${msg}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleUpdateInstagramAccount = async (id: string, accountData: Partial<InstagramAccount>) => {
+    setIsLoading(true);
+    try {
+      const res = await fetch(`/api/instagram/accounts/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(accountData),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      showToast('success', `"${data.account.name}" hesabı güncellendi.`);
+      loadAllData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast('error', `Hesap güncelleme hatası: ${msg}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteInstagramAccount = async (id: string) => {
+    if (!confirm('Bu Instagram hesabını sistemden silmek istediğinize emin misiniz?')) return;
+    setIsLoading(true);
+    try {
+      const res = await fetch(`/api/instagram/accounts/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      showToast('info', data.message || 'Hesap silindi.');
+      loadAllData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast('error', `Hesap silme hatası: ${msg}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSetActiveInstagramAccount = async (id: string) => {
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/instagram/accounts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'set_active', accountId: id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      showToast('success', `Aktif hesap: "${data.activeAccount.name}" (${data.activeAccount.instagramUsername})`);
+      setAccountDropdownOpen(false);
+      loadAllData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast('error', `Hesap değiştirme hatası: ${msg}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Action: Save AI Settings
+  const handleSaveAISettings = async (settings: Partial<AISettings>) => {
+    try {
+      const res = await fetch('/api/settings/ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setAiSettings(data.settings);
+      showToast('success', 'AI ayarları güncellendi.');
+      loadAllData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast('error', `AI ayarları kaydedilemedi: ${msg}`);
+    }
+  };
+
+  // Action: Save Category
+  const handleSaveCategory = async (cat: ContentCategory) => {
+    try {
+      const res = await fetch('/api/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cat),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      showToast('success', `"${cat.name}" güncellendi.`);
+      loadAllData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast('error', `Kategori kaydedilemedi: ${msg}`);
+    }
+  };
+
+  // Action: Save General Settings
+  const handleSaveGeneralSettings = async (settings: Partial<GeneralSettings>) => {
+    try {
+      const res = await fetch('/api/settings/general', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setGeneralSettings(data.general);
+      showToast('success', 'Genel ayarlar kaydedildi.');
+      loadAllData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast('error', `Genel ayarlar kaydedilemedi: ${msg}`);
+    }
+  };
+
+  // Action: Save Brand Outro Settings
+  const handleSaveBrandOutroSettings = async (settings: Partial<BrandOutroSettings>, accountId?: string) => {
+    setIsLoading(true);
+    try {
+      const targetAccountId = accountId || settings.selectedAccountId || activeAccount?.id;
+      const res = await fetch('/api/settings/brand-outro', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...settings,
+          accountId: targetAccountId,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      setBrandOutroSettings(data.settings);
+      showToast('success', 'Marka reklam ve yerleşim ayarları başarıyla kaydedildi.');
+      loadAllData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast('error', `Marka reklam ayarları kaydedilemedi: ${msg}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Action: Save Story Settings
+  const handleSaveStorySettings = async (settings: Partial<StoryAutomationSettings>, accountId?: string) => {
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/instagram/story', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'save_settings', settings, accountId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      setStorySettings(data.settings);
+      showToast('success', 'Otomatik Story ayarları başarıyla kaydedildi.');
+      loadAllData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast('error', `Story ayarları kaydedilemedi: ${msg}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Action: Publish Story Now
+  const handlePublishStoryNow = async (storyData: {
+    imageUrl: string;
+    storyLink: string;
+    linkText: string;
+    accountId?: string;
+  }) => {
+    setIsLoading(true);
+    try {
+      showToast('info', 'Instagram Story yayınlanıyor...');
+      const res = await fetch('/api/instagram/story', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'publish_now', ...storyData }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      showToast('success', 'Instagram Story başarıyla paylaşıldı!');
+      loadAllData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast('error', `Story paylaşılamadı: ${msg}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Action: Upload Story Image
+  const handleUploadStoryImage = async (base64: string, filename: string): Promise<string> => {
+    try {
+      const res = await fetch('/api/instagram/story', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'upload_image', imageBase64: base64, filename }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      return data.imageUrl;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast('error', `Görsel yüklenemedi: ${msg}`);
+      return base64;
+    }
+  };
+
+  // --- PINTEREST HANDLERS ---
+  const handleScanPinterestUrl = async (url: string, category?: PinterestCategory, age?: PinterestAgeFilter) => {
+    setIsLoading(true);
+    try {
+      showToast('info', 'Pinterest bağlantısı taranıyor ve tüm benzer videolar keşfediliyor...');
+      const res = await fetch('/api/pinterest/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, category, ageFilter: age }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      const mainResult = data.result;
+      const itemsToSave: any[] = [];
+
+      // 1. Girdiğimiz ana URL'yi doğrudan "Ticari Kullanıma Uygun" ve onaylı yap
+      itemsToSave.push({
+        ...mainResult,
+        duration: mainResult.duration || '0:14',
+        usage_permission_status: 'Ticari kullanım uygun',
+        approval_status: 'approved',
+        source_license: 'Standart Pinterest İçeriği (Ticari Kullanım Uygun)',
+      });
+
+      // 2. Girdiğimiz URL'nin taranan TÜM benzer videolarını (similar_pins) doğrudan bağımsız video olarak koleksiyona ekle!
+      if (mainResult.similar_pins && Array.isArray(mainResult.similar_pins) && mainResult.similar_pins.length > 0) {
+        for (const sim of mainResult.similar_pins) {
+          itemsToSave.push({
+            id: `pin-sim-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            pin_url: sim.url,
+            pin_title: sim.title,
+            pin_description: `"${mainResult.pin_title}" temasına uygun keşfedilen benzer video`,
+            category: sim.category || mainResult.category,
+            age_filter: sim.age_filter || mainResult.age_filter,
+            thumbnail_url: sim.thumbnail_url,
+            video_url: sim.video_url || mainResult.video_url,
+            embed_html: '',
+            duration: sim.duration || '0:15',
+            added_at: new Date().toISOString(),
+            notes: `Benzer video olarak otomatik tarandı (${mainResult.pin_title})`,
+            favorite: false,
+            usage_permission_status: 'Ticari kullanım uygun',
+            original_creator: sim.author || '@pinterest_creator',
+            source_license: 'Standart Pinterest İçeriği (Ticari Kullanım Uygun)',
+            approval_status: 'approved',
+            archive_status: false,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
+        }
+      }
+
+      // Toplu kaydet
+      const saveRes = await fetch('/api/pinterest/items', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: itemsToSave }),
+      });
+      const savedData = await saveRes.json();
+      if (!saveRes.ok) throw new Error(savedData.error);
+
+      showToast(
+        'success',
+        `Harika! "${mainResult.pin_title}" ve keşfedilen ${itemsToSave.length - 1} adet benzer video (Toplam ${itemsToSave.length} video) doğrudan "Ticari Kullanıma Uygun" olarak koleksiyona eklendi!`
+      );
+      loadAllData();
+      return data.result;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast('error', `Tarama hatası: ${msg}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleScanPinterestBulk = async (
+    urls: string[],
+    category?: PinterestCategory,
+    age?: PinterestAgeFilter,
+    shuffle: boolean = true
+  ) => {
+    setIsLoading(true);
+    try {
+      showToast('info', `${urls.length} adet Pinterest bağlantısı taranıyor ve tüm benzerleri keşfediliyor...`);
+      const res = await fetch('/api/pinterest/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urls, category, ageFilter: age, shuffle }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      const allItemsToSave: any[] = [];
+
+      for (const mainResult of data.results || []) {
+        // Ana pin
+        allItemsToSave.push({
+          ...mainResult,
+          duration: mainResult.duration || '0:14',
+          usage_permission_status: 'Ticari kullanım uygun',
+          approval_status: 'approved',
+          source_license: 'Standart Pinterest İçeriği (Ticari Kullanım Uygun)',
+        });
+
+        // Benzer pinler
+        if (mainResult.similar_pins && Array.isArray(mainResult.similar_pins)) {
+          for (const sim of mainResult.similar_pins) {
+            allItemsToSave.push({
+              id: `pin-sim-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+              pin_url: sim.url,
+              pin_title: sim.title,
+              pin_description: `"${mainResult.pin_title}" temasına uygun benzer video`,
+              category: sim.category || mainResult.category,
+              age_filter: sim.age_filter || mainResult.age_filter,
+              thumbnail_url: sim.thumbnail_url,
+              video_url: sim.video_url || mainResult.video_url,
+              embed_html: '',
+              duration: sim.duration || '0:15',
+              added_at: new Date().toISOString(),
+              notes: `Toplu taramadan benzer video olarak eklendi (${mainResult.pin_title})`,
+              favorite: false,
+              usage_permission_status: 'Ticari kullanım uygun',
+              original_creator: sim.author || '@pinterest_creator',
+              source_license: 'Standart Pinterest İçeriği (Ticari Kullanım Uygun)',
+              approval_status: 'approved',
+              archive_status: false,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            });
+          }
+        }
+      }
+
+      if (allItemsToSave.length > 0) {
+        const saveRes = await fetch('/api/pinterest/items', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items: allItemsToSave }),
+        });
+        const savedData = await saveRes.json();
+        if (!saveRes.ok) throw new Error(savedData.error);
+      }
+
+      showToast(
+        'success',
+        `Tebrikler! ${urls.length} bağlantıdan toplam ${allItemsToSave.length} adet video ve benzeri doğrudan "Ticari Kullanıma Uygun" olarak koleksiyona eklendi!`
+      );
+      loadAllData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast('error', `Toplu tarama hatası: ${msg}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleBulkSetPinterestPermission = async () => {
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/pinterest/items', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ permissionStatus: 'Ticari kullanım uygun', approvalStatus: 'approved' }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      showToast('success', `${data.updatedCount || 'Tüm'} video başarıyla "Ticari Kullanıma Uygun" ve "Onaylandı" olarak güncellendi!`);
+      loadAllData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast('error', `İzin güncelleme hatası: ${msg}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleBatchConvertPinterest = async (pinIds: string[], shuffle: boolean = true) => {
+    setIsLoading(true);
+    try {
+      showToast('info', `${pinIds.length} adet Pinterest videosu karışık sırada Reels montajına ve takvime aktarılıyor...`);
+      const res = await fetch('/api/pinterest/convert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pinIds, shuffle }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      showToast('success', `${data.processed} adet video karışık sırada 9:16 Reels yapıldı ve yayın takvimine (günde 5 slot) dağıtıldı!`);
+      loadAllData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast('error', `Toplu dönüştürme hatası: ${msg}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSavePinterestItem = async (item: PinterestItem) => {
+    try {
+      const res = await fetch('/api/pinterest/items', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(item),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      showToast('success', `"${item.pin_title}" koleksiyona eklendi.`);
+      loadAllData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast('error', `Kaydetme hatası: ${msg}`);
+    }
+  };
+
+  const handleUpdatePinterestItem = async (id: string, updates: Partial<PinterestItem>) => {
+    try {
+      const res = await fetch(`/api/pinterest/items/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      setPinterestItems((prev) => prev.map((item) => (item.id === id ? { ...item, ...updates } : item)));
+      showToast('success', 'İçerik güncellendi.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast('error', `Güncelleme hatası: ${msg}`);
+    }
+  };
+
+  const handleDeletePinterestItem = async (id: string) => {
+    if (!confirm('Bu Pinterest içeriğini silmek istediğinize emin misiniz?')) return;
+    try {
+      const res = await fetch(`/api/pinterest/items/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Silinemedi');
+
+      setPinterestItems((prev) => prev.filter((item) => item.id !== id));
+      showToast('info', 'Pinterest içeriği silindi.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast('error', `Silme hatası: ${msg}`);
+    }
+  };
+
+  const handleConvertPinterestToReels = async (item: PinterestItem) => {
+    setIsLoading(true);
+    try {
+      showToast('info', 'Pinterest videosu Firebase Storage’a yükleniyor ve 9:16 Reels montajına gönderiliyor...');
+      const res = await fetch('/api/pinterest/convert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pinId: item.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      showToast('success', 'Pinterest videosu başarıyla 9:16 Reels olarak hazırlandı ve yayın kuyruğuna eklendi!');
+      setActiveTab('video-library');
+      loadAllData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast('error', `Montaj hatası: ${msg}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="flex h-screen bg-zinc-950 text-zinc-100 overflow-hidden font-sans">
+      {/* Toast Alert */}
+      {toast && (
+        <div
+          className={`fixed bottom-5 right-5 z-50 px-4 py-3 rounded-xl border shadow-2xl flex items-center gap-2.5 text-xs font-semibold backdrop-blur-md transition-all duration-300 ${
+            toast.type === 'success'
+              ? 'bg-emerald-950/90 text-emerald-300 border-emerald-500/40'
+              : toast.type === 'error'
+              ? 'bg-rose-950/90 text-rose-300 border-rose-500/40'
+              : 'bg-zinc-900/90 text-zinc-200 border-zinc-700'
+          }`}
+        >
+          {toast.type === 'success' ? (
+            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+          ) : toast.type === 'error' ? (
+            <AlertTriangle className="w-4 h-4 text-rose-400" />
+          ) : (
+            <Clock className="w-4 h-4 text-cyan-400" />
+          )}
+          <span>{toast.message}</span>
+        </div>
+      )}
+
+      {/* Sidebar (Desktop & Mobile Drawer) */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 w-64 bg-zinc-900/95 border-r border-zinc-800 flex flex-col justify-between transition-transform duration-300 lg:static lg:translate-x-0 ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        <div className="flex flex-col h-full">
+          {/* Brand Header */}
+          <div className="p-5 border-b border-zinc-800 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-rose-600 via-pink-600 to-amber-500 flex items-center justify-center text-white shadow-lg shadow-rose-950/50">
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <div>
+                <h1 className="text-sm font-bold text-white tracking-wide">Evlilik İlanları</h1>
+                <p className="text-[11px] text-zinc-400 font-medium">Reels Otomasyonu</p>
+              </div>
+            </div>
+            <button onClick={() => setSidebarOpen(false)} className="lg:hidden p-1 text-zinc-400 hover:text-white">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* 12 Navigation Items */}
+          <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
+            {NAV_ITEMS.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    setActiveTab(item.id);
+                    setSidebarOpen(false);
+                  }}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-medium transition cursor-pointer ${
+                    isActive
+                      ? 'bg-rose-600 text-white shadow-md shadow-rose-950/50'
+                      : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-zinc-400'}`} />
+                    <span>{item.title}</span>
+                  </div>
+                  {item.badge && (
+                    <span
+                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                        isActive ? 'bg-white/20 text-white' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                      }`}
+                    >
+                      {item.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
+
+          {/* Footer User / Environment Info */}
+          <div className="p-4 border-t border-zinc-800 bg-zinc-950/40">
+            <div className="flex items-center justify-between text-xs text-zinc-400">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="font-mono text-[11px]">Canlı Sistem</span>
+              </div>
+              <span className="text-[10px] text-zinc-500">v2.0 PRO</span>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Top Header */}
+        <header className="h-16 border-b border-zinc-800 bg-zinc-900/60 backdrop-blur-md px-4 sm:px-6 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="lg:hidden p-2 rounded-lg bg-zinc-800 text-zinc-400 hover:text-white"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+            <div className="hidden sm:flex items-center gap-2 text-xs text-zinc-400">
+              <span>Admin Paneli</span>
+              <ChevronRight className="w-3.5 h-3.5 text-zinc-600" />
+              <span className="text-white font-medium capitalize">{NAV_ITEMS.find((n) => n.id === activeTab)?.title}</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {/* Header Account Switcher Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setAccountDropdownOpen(!accountDropdownOpen)}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-800/90 hover:bg-zinc-800 border border-zinc-700/80 text-xs text-white transition cursor-pointer"
+                title="Kullanılan Instagram Hesabını Değiştir"
+              >
+                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <InstagramIcon className="w-4 h-4 text-pink-500" />
+                <div className="flex flex-col text-left">
+                  <span className="font-bold text-[11px] max-w-[120px] sm:max-w-[170px] truncate leading-tight">
+                    {activeAccount?.name || 'Hesap Seç'}
+                  </span>
+                  <span className="text-[10px] text-zinc-400 font-mono leading-none">
+                    {activeAccount?.instagramUsername || '@hesap'}
+                  </span>
+                </div>
+                <ChevronDown className="w-3.5 h-3.5 text-zinc-400 ml-0.5" />
+              </button>
+
+              {/* Dropdown Menu */}
+              {accountDropdownOpen && (
+                <div className="absolute right-0 sm:left-0 sm:right-auto mt-2 w-72 bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl p-2 z-50 space-y-1">
+                  <div className="px-3 py-1.5 text-[11px] font-semibold text-zinc-400 border-b border-zinc-800 flex items-center justify-between">
+                    <span>Instagram Hesapları ({accounts.length}/10)</span>
+                    <button
+                      onClick={() => {
+                        setActiveTab('instagram-account');
+                        setAccountDropdownOpen(false);
+                      }}
+                      className="text-pink-400 hover:text-pink-300 font-bold transition flex items-center gap-1 cursor-pointer"
+                    >
+                      <Plus className="w-3 h-3" /> Ekle
+                    </button>
+                  </div>
+
+                  <div className="max-h-60 overflow-y-auto space-y-1 py-1">
+                    {accounts.map((acc) => {
+                      const isSelected = activeAccount?.id === acc.id;
+                      return (
+                        <button
+                          key={acc.id}
+                          onClick={() => handleSetActiveInstagramAccount(acc.id)}
+                          className={`w-full text-left px-3 py-2 rounded-xl text-xs transition flex items-center justify-between gap-2 cursor-pointer ${
+                            isSelected
+                              ? 'bg-pink-600/20 text-white font-semibold border border-pink-500/30'
+                              : 'hover:bg-zinc-800/80 text-zinc-300'
+                          }`}
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate font-medium">{acc.name}</p>
+                            <p className="text-[10px] text-zinc-400 font-mono">{acc.instagramUsername}</p>
+                          </div>
+                          {isSelected && <Check className="w-4 h-4 text-pink-400 flex-shrink-0" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="pt-1 border-t border-zinc-800">
+                    <button
+                      onClick={() => {
+                        setActiveTab('instagram-account');
+                        setAccountDropdownOpen(false);
+                      }}
+                      className="w-full text-center py-1.5 text-xs text-zinc-400 hover:text-white rounded-lg transition cursor-pointer"
+                    >
+                      Tüm Hesapları Yönet & Yeni Ekle →
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={loadAllData}
+              disabled={isLoading}
+              className="p-2 rounded-xl bg-zinc-800/80 hover:bg-zinc-800 text-zinc-400 hover:text-white transition cursor-pointer"
+              title="Verileri Yenile"
+            >
+              <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+            </button>
+
+            <button
+              onClick={handleGenerateBatch}
+              disabled={isLoading}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold shadow-sm transition disabled:opacity-50 cursor-pointer"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Günün 5 İçeriğini Üret</span>
+            </button>
+          </div>
+        </header>
+
+        {/* Scrollable Tab Views Body */}
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+          <div className="max-w-7xl mx-auto">
+            {activeTab === 'overview' && (
+              <OverviewView
+                stats={stats}
+                videos={videos}
+                queue={queue}
+                onNavigate={(tab) => setActiveTab(tab)}
+                onQuickGenerate={handleGenerateBatch}
+                isLoading={isLoading}
+              />
+            )}
+
+            {activeTab === 'ai-generator' && (
+              <AIGeneratorView
+                categories={categories}
+                ideas={ideas}
+                onGenerateSingle={handleGenerateSingle}
+                onGenerateBatch={handleGenerateBatch}
+                onRenderVideo={handleRenderVideo}
+                isLoading={isLoading}
+              />
+            )}
+
+            {activeTab === 'pinterest-finder' && (
+              <PinterestFinderView
+                items={pinterestItems}
+                onScanUrl={handleScanPinterestUrl}
+                onScanBulk={handleScanPinterestBulk}
+                onSaveItem={handleSavePinterestItem}
+                onUpdateItem={handleUpdatePinterestItem}
+                onDeleteItem={handleDeletePinterestItem}
+                onConvertToReels={handleConvertPinterestToReels}
+                onBatchConvertToReels={handleBatchConvertPinterest}
+                onBulkSetPermission={handleBulkSetPinterestPermission}
+                onRefresh={loadAllData}
+                isLoading={isLoading}
+              />
+            )}
+
+            {activeTab === 'brand-outro' && brandOutroSettings && (
+              <BrandOutroSettingsView
+                settings={brandOutroSettings}
+                accounts={accounts}
+                activeAccount={activeAccount}
+                onSaveSettings={handleSaveBrandOutroSettings}
+                isLoading={isLoading}
+              />
+            )}
+
+            {activeTab === 'story-automation' && storySettings && (
+              <StoryAutomationView
+                settings={storySettings}
+                history={storyHistory}
+                accounts={accounts}
+                activeAccount={activeAccount}
+                onSaveSettings={handleSaveStorySettings}
+                onPublishNow={handlePublishStoryNow}
+                onUploadImage={handleUploadStoryImage}
+                isLoading={isLoading}
+              />
+            )}
+
+            {activeTab === 'video-library' && (
+              <VideoLibraryView
+                videos={videos}
+                onPublishNow={handlePublishNow}
+                onAddToQueue={handleAddToQueue}
+                onUpdateVideo={handleUpdateVideo}
+                onDeleteVideo={handleDeleteVideo}
+                onRegenerate={(v) => handleRenderVideo({ ...v, generationPrompt: v.title } as any, v.productionType)}
+                isLoading={isLoading}
+              />
+            )}
+
+            {activeTab === 'schedule' && (
+              <ScheduleView
+                queue={queue}
+                defaultSlots={generalSettings?.defaultPublishSlots || []}
+                onUpdateSlotTime={async (id, newTime) => {
+                  await fetch('/api/queue', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id, scheduledTime: newTime }),
+                  });
+                  loadAllData();
+                }}
+                onPublishQueueItem={async (queueId, videoId) => {
+                  await handlePublishNow(videoId);
+                }}
+                onDeleteQueueItem={async (id) => {
+                  await fetch(`/api/queue?id=${id}`, { method: 'DELETE' });
+                  loadAllData();
+                }}
+                onSaveDefaultSlots={async (slots) => {
+                  await handleSaveGeneralSettings({ defaultPublishSlots: slots });
+                }}
+                isLoading={isLoading}
+              />
+            )}
+
+            {activeTab === 'instagram-account' && (
+              <InstagramAccountView
+                accounts={accounts}
+                activeAccount={activeAccount}
+                onAddAccount={handleAddInstagramAccount}
+                onUpdateAccount={handleUpdateInstagramAccount}
+                onDeleteAccount={handleDeleteInstagramAccount}
+                onSetActiveAccount={handleSetActiveInstagramAccount}
+                isLoading={isLoading}
+              />
+            )}
+
+            {activeTab === 'categories' && (
+              <CategoriesView
+                categories={categories}
+                onSaveCategory={handleSaveCategory}
+                isLoading={isLoading}
+              />
+            )}
+
+            {activeTab === 'ai-models' && aiSettings && (
+              <AIModelsView
+                settings={aiSettings}
+                onSaveSettings={handleSaveAISettings}
+                isLoading={isLoading}
+              />
+            )}
+
+            {activeTab === 'integrations' && aiSettings && instagramSettings && (
+              <IntegrationsView
+                aiSettings={aiSettings}
+                instagramSettings={instagramSettings}
+                onSaveAISettings={handleSaveAISettings}
+                onSaveInstagramSettings={handleSaveInstagramSettings}
+                isLoading={isLoading}
+              />
+            )}
+
+            {activeTab === 'cost-management' && costLimits && (
+              <CostManagementView
+                limits={costLimits}
+                apiUsage={apiUsage}
+                onSaveLimits={handleSaveCostLimits}
+                isLoading={isLoading}
+              />
+            )}
+
+            {activeTab === 'statistics' && (
+              <StatisticsView stats={stats} videos={videos} />
+            )}
+
+            {activeTab === 'logs' && (
+              <LogsView logs={logs} onRefreshLogs={loadAllData} isLoading={isLoading} />
+            )}
+
+            {activeTab === 'settings' && generalSettings && (
+              <GeneralSettingsView
+                settings={generalSettings}
+                onSaveSettings={handleSaveGeneralSettings}
+                isLoading={isLoading}
+              />
+            )}
+          </div>
+        </main>
+      </div>
+    </div>
+  );
+}
