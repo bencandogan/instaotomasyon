@@ -659,18 +659,30 @@ export class PlatformRepository {
 
   // --- SETTINGS (INSTAGRAM, AI, COST, GENERAL) ---
   static async getInstagramSettings(): Promise<InstagramSettings> {
+    let settings = memoryStore.instagramSettings;
     try {
       const db = getAdminDb();
       if (db) {
         const doc = await db.collection('instagram_settings').doc('config').get();
         if (doc.exists) {
-          return doc.data() as InstagramSettings;
+          settings = doc.data() as InstagramSettings;
         }
       }
     } catch {
       // fallback
     }
-    return memoryStore.instagramSettings;
+
+    const envAccId = process.env.INSTAGRAM_ACCOUNT_ID;
+    if (envAccId) {
+      settings.instagramAccountId = envAccId;
+      settings.isConnected = true;
+      settings.isTestMode = false;
+      settings.hasReelsPermission = true;
+      settings.hasInsightsPermission = true;
+      settings.instagramUsername = '@havvakabakli56';
+      settings.facebookPageName = 'havva kabaklı';
+    }
+    return settings;
   }
 
   static async saveInstagramSettings(settings: Partial<InstagramSettings>): Promise<InstagramSettings> {
@@ -798,6 +810,14 @@ export class PlatformRepository {
   static async getActiveInstagramAccount(): Promise<InstagramAccount> {
     const accounts = await this.getInstagramAccounts();
     const active = accounts.find((a) => a.isDefault) || accounts[0] || DEFAULT_INSTAGRAM_ACCOUNTS[0];
+    if (process.env.INSTAGRAM_ACCOUNT_ID) {
+      active.instagramAccountId = process.env.INSTAGRAM_ACCOUNT_ID;
+      active.instagramUsername = '@havvakabakli56';
+      active.isConnected = true;
+      active.isTestMode = false;
+      active.hasReelsPermission = true;
+      active.hasInsightsPermission = true;
+    }
     return active;
   }
 
