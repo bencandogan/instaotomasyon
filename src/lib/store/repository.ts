@@ -714,7 +714,7 @@ export class PlatformRepository {
       if (db) {
         const snap = await db.collection('instagram_accounts').orderBy('createdAt', 'asc').get();
         if (!snap.empty) {
-          return snap.docs.map((doc) => doc.data() as InstagramAccount);
+          return snap.docs.map((doc: any) => doc.data() as InstagramAccount);
         }
       }
     } catch {
@@ -777,7 +777,7 @@ export class PlatformRepository {
         if (account.isDefault) {
           const batch = db.batch();
           const snap = await db.collection('instagram_accounts').where('isDefault', '==', true).get();
-          snap.docs.forEach((doc) => {
+          snap.docs.forEach((doc: any) => {
             if (doc.id !== account.id) {
               batch.update(doc.ref, { isDefault: false });
             }
