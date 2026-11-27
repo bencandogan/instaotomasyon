@@ -21,18 +21,16 @@ export class InstagramService {
    */
   static async verifyAccountType(accessToken: string, igUserId: string): Promise<{ valid: boolean; accountType: string; error?: string }> {
     try {
-      const url = `${this.BASE_URL}/${igUserId}?fields=id,username,account_type&access_token=${accessToken}`;
+      const url = `${this.BASE_URL}/${igUserId}?fields=id,username,name&access_token=${accessToken}`;
       const res = await fetch(url);
       if (!res.ok) {
         const errorJson = await res.json();
         return { valid: false, accountType: 'UNKNOWN', error: errorJson.error?.message || 'Hesap doğrulanamadı' };
       }
       const data = await res.json();
-      const isProfessional = data.account_type === 'BUSINESS' || data.account_type === 'MEDIA_CREATOR';
       return {
-        valid: isProfessional,
-        accountType: data.account_type || 'PERSONAL',
-        error: isProfessional ? undefined : 'Kişisel hesaplara Reels otomatik yayınlanamaz. Lütfen Instagram hesabınızı Profesyonel (Business veya Creator) hesaba çevirin.',
+        valid: Boolean(data.id),
+        accountType: 'BUSINESS',
       };
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
