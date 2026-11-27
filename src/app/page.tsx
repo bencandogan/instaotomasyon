@@ -101,6 +101,14 @@ export default function AdminDashboardPage() {
   // Load All Initial Data
   const loadAllData = async () => {
     try {
+      const safeFetchJson = (url: string) =>
+        fetch(url)
+          .then(async (r) => {
+            if (!r.ok) return null;
+            return r.json().catch(() => null);
+          })
+          .catch(() => null);
+
       const [
         statsRes,
         catRes,
@@ -116,19 +124,19 @@ export default function AdminDashboardPage() {
         outroRes,
         storyRes,
       ] = await Promise.all([
-        fetch('/api/stats').then((r) => r.json()),
-        fetch('/api/categories').then((r) => r.json()),
-        fetch('/api/video/render').then((r) => r.json()),
-        fetch('/api/queue').then((r) => r.json()),
-        fetch('/api/instagram/status').then((r) => r.json()),
-        fetch('/api/settings/ai').then((r) => r.json()),
-        fetch('/api/settings/cost').then((r) => r.json()),
-        fetch('/api/settings/general').then((r) => r.json()),
-        fetch('/api/logs?limit=50').then((r) => r.json()),
-        fetch('/api/pinterest/items').then((r) => r.json()),
-        fetch('/api/instagram/accounts').then((r) => r.json()),
-        fetch('/api/settings/brand-outro').then((r) => r.json()),
-        fetch('/api/instagram/story').then((r) => r.json()),
+        safeFetchJson('/api/stats'),
+        safeFetchJson('/api/categories'),
+        safeFetchJson('/api/video/render'),
+        safeFetchJson('/api/queue'),
+        safeFetchJson('/api/instagram/status'),
+        safeFetchJson('/api/settings/ai'),
+        safeFetchJson('/api/settings/cost'),
+        safeFetchJson('/api/settings/general'),
+        safeFetchJson('/api/logs?limit=50'),
+        safeFetchJson('/api/pinterest/items'),
+        safeFetchJson('/api/instagram/accounts'),
+        safeFetchJson('/api/settings/brand-outro'),
+        safeFetchJson('/api/instagram/story'),
       ]);
 
       if (statsRes?.stats) setStats(statsRes.stats);
@@ -420,10 +428,16 @@ export default function AdminDashboardPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(accountData),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      const text = await res.text();
+      let data: any = {};
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        // non-json response
+      }
+      if (!res.ok) throw new Error(data.error || `Sunucu hatası (${res.status})`);
 
-      showToast('success', `"${data.account.name}" hesabı başarıyla eklendi.`);
+      showToast('success', `"${data.account?.name || 'Hesap'}" başarıyla eklendi.`);
       loadAllData();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -441,10 +455,16 @@ export default function AdminDashboardPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(accountData),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      const text = await res.text();
+      let data: any = {};
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        // non-json
+      }
+      if (!res.ok) throw new Error(data.error || `Sunucu hatası (${res.status})`);
 
-      showToast('success', `"${data.account.name}" hesabı güncellendi.`);
+      showToast('success', `"${data.account?.name || 'Hesap'}" güncellendi.`);
       loadAllData();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -459,8 +479,14 @@ export default function AdminDashboardPage() {
     setIsLoading(true);
     try {
       const res = await fetch(`/api/instagram/accounts/${id}`, { method: 'DELETE' });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      const text = await res.text();
+      let data: any = {};
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        // non-json
+      }
+      if (!res.ok) throw new Error(data.error || `Sunucu hatası (${res.status})`);
 
       showToast('info', data.message || 'Hesap silindi.');
       loadAllData();
@@ -480,10 +506,16 @@ export default function AdminDashboardPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'set_active', accountId: id }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      const text = await res.text();
+      let data: any = {};
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        // non-json
+      }
+      if (!res.ok) throw new Error(data.error || `Sunucu hatası (${res.status})`);
 
-      showToast('success', `Aktif hesap: "${data.activeAccount.name}" (${data.activeAccount.instagramUsername})`);
+      showToast('success', `Aktif hesap: "${data.activeAccount?.name || ''}" (${data.activeAccount?.instagramUsername || ''})`);
       setAccountDropdownOpen(false);
       loadAllData();
     } catch (err: unknown) {

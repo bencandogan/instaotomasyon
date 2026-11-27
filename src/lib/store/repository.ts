@@ -672,7 +672,7 @@ export class PlatformRepository {
       // fallback
     }
 
-    const envAccId = process.env.INSTAGRAM_ACCOUNT_ID;
+    const envAccId = process.env.INSTAGRAM_ACCOUNT_ID || '17841471565707771';
     if (envAccId) {
       settings.instagramAccountId = envAccId;
       settings.isConnected = true;
@@ -810,8 +810,9 @@ export class PlatformRepository {
   static async getActiveInstagramAccount(): Promise<InstagramAccount> {
     const accounts = await this.getInstagramAccounts();
     const active = accounts.find((a) => a.isDefault) || accounts[0] || DEFAULT_INSTAGRAM_ACCOUNTS[0];
-    if (process.env.INSTAGRAM_ACCOUNT_ID) {
-      active.instagramAccountId = process.env.INSTAGRAM_ACCOUNT_ID;
+    const envAccId = process.env.INSTAGRAM_ACCOUNT_ID || '17841471565707771';
+    if (envAccId) {
+      active.instagramAccountId = envAccId;
       active.instagramUsername = '@havvakabakli56';
       active.isConnected = true;
       active.isTestMode = false;

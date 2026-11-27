@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { PlatformRepository } from '@/lib/store/repository';
 import { InstagramAccount } from '@/types';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     const accounts = await PlatformRepository.getInstagramAccounts();
@@ -20,7 +22,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
+    const body = await req.json().catch(() => ({}));
 
     // 1. Aktif hesap değiştirme isteği
     if (body.action === 'set_active' && body.accountId) {

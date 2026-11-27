@@ -2,6 +2,10 @@
 import { GeneratedVideo, InstagramSettings, StoryPublishItem } from '@/types';
 import { PlatformRepository } from '@/lib/store/repository';
 
+export const DEFAULT_META_ACCESS_TOKEN =
+  'EAAdsNu1E2wcBTJweRVQt8WbfDP3KD74Ht9b7T3WzAah4Tn34SE3dpdBXG5iDyyvZBsWVlG2a8U4zORIbGCGnRtM0jHZAVfJCopuOggiiIDeXHELtV5VV3g5ZCq9NS2uxgplANxvQZCnuBSLT65DajwnkFZBLS6ptjYohXedsqSZBvns2AaVuEyNuUGiVbOOmZCQwR8d2UmlEFbIA184u5wMZBKMlclqr4feXbbNiLBhSJxNqOPFcddHZChgZDZD';
+export const DEFAULT_INSTAGRAM_ACCOUNT_ID = '17841471565707771';
+
 export interface PublishReelsResult {
   success: boolean;
   instagramContainerId?: string;
@@ -163,8 +167,8 @@ export class InstagramService {
     }
 
     const settings = await PlatformRepository.getInstagramSettings();
-    const token = process.env.META_ACCESS_TOKEN || process.env.INSTAGRAM_ACCESS_TOKEN;
-    const igUserId = process.env.INSTAGRAM_ACCOUNT_ID || settings.instagramAccountId;
+    const token = process.env.META_ACCESS_TOKEN || process.env.INSTAGRAM_ACCESS_TOKEN || DEFAULT_META_ACCESS_TOKEN;
+    const igUserId = process.env.INSTAGRAM_ACCOUNT_ID || settings.instagramAccountId || DEFAULT_INSTAGRAM_ACCOUNT_ID;
 
     const hasRealCredentials = Boolean(token && token.trim() !== '' && igUserId && igUserId.trim() !== '' && !settings.isTestMode);
 
@@ -279,8 +283,8 @@ export class InstagramService {
       ? await PlatformRepository.getInstagramAccountById(options.accountId)
       : await PlatformRepository.getActiveInstagramAccount();
 
-    const token = process.env.META_ACCESS_TOKEN || process.env.INSTAGRAM_ACCESS_TOKEN;
-    const igUserId = acc?.instagramAccountId || process.env.INSTAGRAM_ACCOUNT_ID;
+    const token = process.env.META_ACCESS_TOKEN || process.env.INSTAGRAM_ACCESS_TOKEN || DEFAULT_META_ACCESS_TOKEN;
+    const igUserId = acc?.instagramAccountId || process.env.INSTAGRAM_ACCOUNT_ID || DEFAULT_INSTAGRAM_ACCOUNT_ID;
     const isTestMode = acc ? !acc.isConnected : true;
 
     const now = new Date().toISOString();
