@@ -1106,6 +1106,62 @@ export default function AdminDashboardPage() {
     }
   };
 
+  const handleDeletePinterestBulk = async (ids: string[]) => {
+    if (!confirm(`Seçilen ${ids.length} adet Pinterest videosunu silmek istediğinize emin misiniz?`)) return;
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/pinterest/items', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      });
+      if (!res.ok) throw new Error('Toplu silme başarısız');
+
+      const idSet = new Set(ids);
+      setPinterestItems((prev) => {
+        const updated = prev.filter((p) => !idSet.has(p.id));
+        try {
+          localStorage.setItem('insta_pinterest_items', JSON.stringify(updated));
+        } catch {}
+        return updated;
+      });
+
+      showToast('success', `${ids.length} adet Pinterest videosu silindi.`);
+      loadAllData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast('error', `Toplu silme hatası: ${msg}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleClearAllPinterest = async () => {
+    if (!confirm('TÜM Pinterest videolarını havuzdan silmek ve havuzu sıfırlamak istediğinize emin misiniz?')) return;
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/pinterest/items', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ all: true }),
+      });
+      if (!res.ok) throw new Error('Havuz temizlenemedi');
+
+      setPinterestItems([]);
+      try {
+        localStorage.setItem('insta_pinterest_items', JSON.stringify([]));
+      } catch {}
+
+      showToast('success', 'Tüm Pinterest videoları başarıyla temizlendi, havuz sıfırlandı.');
+      loadAllData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast('error', `Temizleme hatası: ${msg}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleConvertPinterestToReels = async (item: PinterestItem) => {
     setIsLoading(true);
     try {
@@ -1458,6 +1514,8 @@ export default function AdminDashboardPage() {
                 onSaveItem={handleSavePinterestItem}
                 onUpdateItem={handleUpdatePinterestItem}
                 onDeleteItem={handleDeletePinterestItem}
+                onDeleteBulk={handleDeletePinterestBulk}
+                onClearAll={handleClearAllPinterest}
                 onConvertToReels={handleConvertPinterestToReels}
                 onBatchConvertToReels={handleBatchConvertPinterest}
                 onBulkSetPermission={handleBulkSetPinterestPermission}

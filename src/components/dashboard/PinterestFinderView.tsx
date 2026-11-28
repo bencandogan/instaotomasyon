@@ -123,6 +123,8 @@ interface PinterestFinderProps {
   onSaveItem: (item: PinterestItem) => Promise<void>;
   onUpdateItem: (id: string, updates: Partial<PinterestItem>) => Promise<void>;
   onDeleteItem: (id: string) => Promise<void>;
+  onDeleteBulk?: (ids: string[]) => Promise<void>;
+  onClearAll?: () => Promise<void>;
   onConvertToReels: (item: PinterestItem) => Promise<void>;
   onBatchConvertToReels?: (pinIds: string[], shuffle: boolean) => Promise<void>;
   onBulkSetPermission?: () => Promise<void>;
@@ -137,6 +139,8 @@ export function PinterestFinderView({
   onSaveItem,
   onUpdateItem,
   onDeleteItem,
+  onDeleteBulk,
+  onClearAll,
   onConvertToReels,
   onBatchConvertToReels,
   onBulkSetPermission,
@@ -245,6 +249,21 @@ export function PinterestFinderView({
     if (!confirm('Sistemde kayıtlı tüm Pinterest linklerini silmek istediğinize emin misiniz?')) return;
     await persistUrls([]);
     setUrlInput('');
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedPinIds.length === 0) return;
+    if (onDeleteBulk) {
+      await onDeleteBulk(selectedPinIds);
+      setSelectedPinIds([]);
+    }
+  };
+
+  const handleClearAll = async () => {
+    if (onClearAll) {
+      await onClearAll();
+      setSelectedPinIds([]);
+    }
   };
 
   // Filters State
@@ -705,6 +724,18 @@ export function PinterestFinderView({
           <span className="text-xs text-zinc-400">
             Toplam: <strong className="text-white">{filteredItems.length}</strong> pin
           </span>
+
+          {items.length > 0 && onClearAll && (
+            <button
+              onClick={handleClearAll}
+              disabled={isLoading}
+              className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-rose-950/40 text-zinc-400 hover:text-rose-400 border border-zinc-700 hover:border-rose-800 text-xs font-medium transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              title="Tüm Pinterest videolarını havuzdan siler ve sıfırlar"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Tümünü Sil</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -740,17 +771,31 @@ export function PinterestFinderView({
             )}
           </div>
 
-          {selectedPinIds.length > 0 && onBatchConvertToReels && (
-            <button
-              type="button"
-              onClick={() => onBatchConvertToReels(selectedPinIds, true)}
-              disabled={isLoading}
-              className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-lg shadow-emerald-950/40 disabled:opacity-50"
-            >
-              <Shuffle className="w-4 h-4" />
-              <span>Seçilen {selectedPinIds.length} Videoyu Karışık Sırada Reels Yap & Yayınla</span>
-            </button>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            {selectedPinIds.length > 0 && onDeleteBulk && (
+              <button
+                type="button"
+                onClick={handleDeleteSelected}
+                disabled={isLoading}
+                className="px-3.5 py-2 rounded-xl bg-rose-600/90 hover:bg-rose-600 text-white text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer shadow-lg shadow-rose-950/40 disabled:opacity-50"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Seçilenleri Sil ({selectedPinIds.length})</span>
+              </button>
+            )}
+
+            {selectedPinIds.length > 0 && onBatchConvertToReels && (
+              <button
+                type="button"
+                onClick={() => onBatchConvertToReels(selectedPinIds, true)}
+                disabled={isLoading}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-lg shadow-emerald-950/40 disabled:opacity-50"
+              >
+                <Shuffle className="w-4 h-4" />
+                <span>Seçilen {selectedPinIds.length} Videoyu Karışık Sırada Reels Yap & Yayınla</span>
+              </button>
+            )}
+          </div>
         </div>
       )}
 

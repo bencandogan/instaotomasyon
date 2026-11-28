@@ -1119,6 +1119,54 @@ export class PlatformRepository {
     }
   }
 
+  static async clearAllPinterestItems(): Promise<void> {
+    memoryStore.pinterestItems = [];
+    try {
+      const db = getAdminDb();
+      if (db) {
+        const snap = await db.collection('pinterest_collection').get();
+        if (!snap.empty) {
+          const batchSize = 400;
+          const docs = snap.docs;
+          for (let i = 0; i < docs.length; i += batchSize) {
+            const batch = db.batch();
+            const chunk = docs.slice(i, i + batchSize);
+            for (const d of chunk) {
+              batch.delete(d.ref);
+            }
+            await batch.commit();
+          }
+        }
+      }
+    } catch {
+      // fallback
+    }
+  }
+
+  static async bulkDeletePinterestItems(ids: string[]): Promise<number> {
+    const idSet = new Set(ids);
+    memoryStore.pinterestItems = memoryStore.pinterestItems.filter((p) => !idSet.has(p.id));
+    let deleted = 0;
+    try {
+      const db = getAdminDb();
+      if (db) {
+        const batchSize = 400;
+        for (let i = 0; i < ids.length; i += batchSize) {
+          const batch = db.batch();
+          const chunk = ids.slice(i, i + batchSize);
+          for (const id of chunk) {
+            batch.delete(db.collection('pinterest_collection').doc(id));
+          }
+          await batch.commit();
+          deleted += chunk.length;
+        }
+      }
+    } catch {
+      // fallback
+    }
+    return deleted || ids.length;
+  }
+
   static async bulkUpdatePinterestItemsPermission(
     permissionStatus: UsagePermissionStatus = 'Ticari kullanım uygun',
     approvalStatus: 'approved' | 'pending' | 'rejected' = 'approved'

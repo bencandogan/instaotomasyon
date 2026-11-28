@@ -153,3 +153,28 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
+
+// Toplu silme veya tümünü temizleme endpoint'i
+export async function DELETE(req: Request) {
+  try {
+    const body = await req.json().catch(() => ({}));
+    const { ids, all } = body;
+
+    if (all) {
+      await PlatformRepository.clearAllPinterestItems();
+      await PlatformRepository.log('INFO', 'AI_CONTENT', 'PINTEREST_ITEMS_CLEARED', 'Tüm Pinterest videoları başarıyla temizlendi.');
+      return NextResponse.json({ success: true, message: 'Tüm Pinterest videoları temizlendi.' });
+    }
+
+    if (Array.isArray(ids) && ids.length > 0) {
+      const count = await PlatformRepository.bulkDeletePinterestItems(ids);
+      await PlatformRepository.log('INFO', 'AI_CONTENT', 'PINTEREST_ITEMS_BULK_DELETED', `${count} adet Pinterest videosu silindi.`);
+      return NextResponse.json({ success: true, deletedCount: count });
+    }
+
+    return NextResponse.json({ error: 'Lütfen silinecek ID listesini veya all:true belirtin.' }, { status: 400 });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
+}
