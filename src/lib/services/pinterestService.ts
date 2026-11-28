@@ -516,6 +516,44 @@ export class PinterestService {
           }
         }
 
+        // 1.B: Pinterest Relay & Doğrudan HTML Video / MP4 Çıkarma (Sunucu tarafı ve Vercel için garanti)
+        if (!videoUrl || videoUrl.includes('mixkit.co')) {
+          const mp4Match = pageHtml.match(/https:\/\/(?:v1|v)\.pinimg\.com\/videos\/[^"'\s\\]+\.mp4/i);
+          if (mp4Match) {
+            videoUrl = mp4Match[0];
+          } else {
+            const hlsMatch = pageHtml.match(/https:\/\/(?:v1|v)\.pinimg\.com\/videos\/[^"'\s\\]+\.m3u8/i);
+            if (hlsMatch) videoUrl = hlsMatch[0];
+          }
+        }
+
+        // Doğrudan video kapağı (Thumbnail) çıkarma
+        if (!thumbnailUrl || thumbnailUrl.includes('unsplash.com')) {
+          const thumbMatch = pageHtml.match(/https:\/\/i\.pinimg\.com\/videos\/thumbnails\/[^"'\s\\]+\.jpg/i);
+          if (thumbMatch) {
+            thumbnailUrl = thumbMatch[0];
+          } else {
+            const ogImg = pageHtml.match(/<meta property="og:image" content="([^"]+)"/i);
+            if (ogImg && ogImg[1]) thumbnailUrl = ogImg[1];
+          }
+        }
+
+        // Doğrudan başlık çıkarma
+        if (title === 'Pinterest Video İçeriği') {
+          const ogTitle = pageHtml.match(/<meta property="og:title" content="([^"]+)"/i) || pageHtml.match(/<title>([^<]+)<\/title>/i);
+          if (ogTitle && ogTitle[1]) {
+            title = ogTitle[1].replace(/\s*\|\s*Pinterest.*$/i, '').trim();
+          }
+        }
+
+        // Doğrudan süre çıkarma
+        const durMatch = pageHtml.match(/"duration":\s*(\d+)/);
+        if (durMatch && durMatch[1]) {
+          const ms = parseInt(durMatch[1], 10);
+          const sec = ms > 1000 ? Math.round(ms / 1000) : ms;
+          duration = `0:${sec < 10 ? '0' + sec : sec}`;
+        }
+
         // App version extraction
         const avMatch = pageHtml.match(/"appVersion":"([^"]+)"/);
         if (avMatch) appVersion = avMatch[1];
@@ -679,10 +717,10 @@ export class PinterestService {
       }
     }
 
-    // Sadece bağlantıdaki gerçek öneriler kullanılır
+    // Sayfadan canlı öneri gelmediyse zengin kategori benzer videolarını havuza ekle
     const finalSimilarPins: SimilarPinItem[] = realRecommendations.length > 0
       ? realRecommendations
-      : [];
+      : this.generateSimilarPins(detectedCategory, chosenAge);
 
     return {
       pin_url: trimmed,
