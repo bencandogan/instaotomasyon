@@ -11,6 +11,7 @@ import {
 import { PlatformRepository } from '@/lib/store/repository';
 import { getAdminStorage } from '@/lib/firebase/admin';
 import { AIContentService } from '@/lib/services/aiContentService';
+import { PinterestBrowserService } from '@/lib/services/pinterestBrowserService';
 
 export interface ScanUrlResult {
   pin_url: string;
@@ -465,9 +466,6 @@ export class PinterestService {
     let embedHtml = '';
     let creator = '@pinterest_creator';
     let duration = '0:14';
-    let appVersion = '78f39b6';
-    let cookieHeader = '';
-    let csrf = '';
 
     // Pin ID tespiti (ilk kontrol)
     const idMatch = trimmed.match(/\/pin\/(\d+)/);
@@ -485,14 +483,6 @@ export class PinterestService {
       });
 
       if (pageRes.ok) {
-        const rawCookies = pageRes.headers.getSetCookie ? pageRes.headers.getSetCookie() : [];
-        cookieHeader = rawCookies.map((c) => c.split(';')[0]).join('; ');
-        for (const c of rawCookies) {
-          if (c.startsWith('csrftoken=')) {
-            csrf = c.split(';')[0].replace('csrftoken=', '');
-            break;
-          }
-        }
         const finalUrl = pageRes.url || trimmed;
         if (!pinId) {
           const finalMatch = finalUrl.match(/\/pin\/(\d+)/);
@@ -571,9 +561,6 @@ export class PinterestService {
           duration = `0:${sec < 10 ? '0' + sec : sec}`;
         }
 
-        // App version extraction
-        const avMatch = pageHtml.match(/"appVersion":"([^"]+)"/);
-        if (avMatch) appVersion = avMatch[1];
       }
     } catch (e) {
       console.warn('Pinterest sayfa kazıma fallback:', e);
@@ -603,74 +590,46 @@ export class PinterestService {
     // URL ve başlığa göre akıllı kategori tespiti
     const detectedCategory: PinterestCategory = chosenCategory || this.autoDetectCategory(trimmed, title, description);
 
-    // 3. Pinterest Sayfasındaki GERÇEK Önerileri (GraphQL GatedCloseupRelatedPinsFeedQuery) ile Doğrudan Çekme
+    // 3. Pin sayfasının ALTINDA gösterilen "benzer videolar" akışını çekme.
+    //    NOT: Pinterest'in /_/graphql/ endpoint'i sunucu tarafı fetch (Node) ile çağrıldığında
+    //    JSON yerine HTML sayfası veya 403 döndürüyor. Bu yüzden istek, sunucuda kurulu
+    //    gerçek Chrome/Chromium oturumunun içinden atılmak zorunda.
     const realRecommendations: SimilarPinItem[] = [];
     if (pinId) {
-      try {
-        const gqlRes = await fetch('https://tr.pinterest.com/_/graphql/', {
-          method: 'POST',
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36',
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'Origin': 'https://tr.pinterest.com',
-            'Referer': `https://tr.pinterest.com/pin/${pinId}/`,
-            'X-Pinterest-AppState': 'active',
-            'X-Pinterest-GraphQL-Name': 'GatedCloseupRelatedPinsFeedQuery',
-            'X-Pinterest-PWS-Handler': 'www/pin/[id].js',
-            'X-Pinterest-Source-Url': `/pin/${pinId}/`,
-            'X-CSRFToken': csrf,
-            'Cookie': cookieHeader,
-          },
-          body: JSON.stringify({
-            queryHash: '22d4b5f01f07c1be71875fc3555a98a630cb701ea7090b818d4dc456325515e6',
-            variables: { count: 100, pinId },
-          }),
-        });
-
-        if (gqlRes.ok) {
-          const json = await gqlRes.json();
-          const edges = json.data?.v3RelatedPinsForPinSeoQuery?.data?.connection?.edges || [];
-
-          for (const edge of edges) {
-            const node = edge?.node;
-            if (!node) continue;
-            const vList = node.videos?.videoList;
-            if (!vList) continue;
-
-            const vidUrl = vList.vEXP7?.url || vList.v720P?.url || vList.vHLSV4?.url || vList.vHLSV3MOBILE?.url;
-            if (!vidUrl || vidUrl === videoUrl) continue;
-            if (realRecommendations.some((r) => r.video_url === vidUrl)) continue;
-
-            const recId = node.entityId || node.id || `rec-${realRecommendations.length}`;
-            const thumb = node.images_736x?.url || node.images_orig?.url || node.images_474x?.url || thumbnailUrl;
-            const durSec = node.videos?.duration ? Math.round(node.videos.duration / 1000) : 15;
-            const recTitle = node.title || node.grid_title || `${title} - Benzer Video #${realRecommendations.length + 1}`;
-            const recAuthor = node.pinner?.username ? `@${node.pinner.username}` : creator;
-
-            realRecommendations.push({
-              id: `pin-${recId}`,
-              title: recTitle,
-              url: `https://tr.pinterest.com/pin/${recId}/`,
-              thumbnail_url: thumb,
-              video_url: vidUrl,
-              category: detectedCategory,
-              age_filter: chosenAge || '25–30 yaş görünümü',
-              author: recAuthor,
-              duration: `0:${durSec < 10 ? '0' + durSec : durSec}`,
-            });
-
-            if (realRecommendations.length >= 50) break;
-          }
+      if (PinterestBrowserService.isAvailable()) {
+        try {
+          const relatedVideos = await PinterestBrowserService.fetchRelatedVideos(pinId, {
+            seedTitle: title,
+            category: detectedCategory,
+            ageFilter: chosenAge || '25–30 yaş görünümü',
+            maxVideos: this.relatedVideoLimit(),
+            // Ana pinin kendi videosu benzer listeye girmesin
+            excludeVideoUrls: [videoUrl],
+          });
+          realRecommendations.push(...relatedVideos);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.warn('Pinterest benzer video çekme hatası:', msg);
+          await this.safeLog(
+            'WARN',
+            'PINTEREST_RELATED_FETCH_FAILED',
+            `"${title}" için benzer videolar alınamadı: ${msg}`,
+            { pinId }
+          );
         }
-      } catch (err) {
-        console.warn('Pinterest GraphQL önerileri çekme hatası:', err);
+      } else {
+        await this.safeLog(
+          'WARN',
+          'PINTEREST_CHROME_MISSING',
+          'Sunucuda Chrome/Chromium bulunamadı; benzer videolar çekilemiyor (apt install -y chromium).',
+          { pinId }
+        );
       }
     }
 
     // Kullanıcı isteği doğrultusunda: Kesinlikle kategori/arama bazlı video aranmaz!
     // Sadece ve sadece tıklanan bu videonun altında Pinterest'in önerdiği doğrudan videolar eklenir.
-    const finalSimilarPins: SimilarPinItem[] = realRecommendations.length > 0 ? realRecommendations : [];
+    const finalSimilarPins: SimilarPinItem[] = realRecommendations;
 
     return {
       pin_url: trimmed,
@@ -721,6 +680,27 @@ export class PinterestService {
     }
 
     return results;
+  }
+
+  /** Bir pin taramasında en fazla kaç benzer video döndürüleceği (varsayılan 60) */
+  private static relatedVideoLimit(): number {
+    const fromEnv = Number(process.env.PINTEREST_RELATED_MAX_VIDEOS || '');
+    if (Number.isFinite(fromEnv) && fromEnv > 0) return Math.floor(fromEnv);
+    return 60;
+  }
+
+  /** Log yazımı başarısız olsa bile tarama akışını bozmayan yardımcı */
+  private static async safeLog(
+    level: 'INFO' | 'WARN' | 'ERROR',
+    action: string,
+    message: string,
+    details?: Record<string, unknown>
+  ): Promise<void> {
+    try {
+      await PlatformRepository.log(level, 'AI_CONTENT', action, message, details);
+    } catch {
+      // Log yazımı başarısız olsa da tarama devam etmeli
+    }
   }
 
   /**

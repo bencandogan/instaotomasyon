@@ -340,6 +340,12 @@ export interface SimilarPinItem {
   age_filter?: PinterestAgeFilter;
   author?: string;
   duration?: string; // Örn: '0:14', '0:25', '0:26' (Pinterest video süresi)
+  /** Pinterest video kaynak kimliği (yeni benzer pin akışından gelir) */
+  video_id?: string;
+  /** Pinterest global pin kimliği (base64, ör. UGluOmUxX0F...) */
+  pin_global_id?: string;
+  /** Bu videonun önerildiği ana pin URL'si */
+  source_pin_url?: string;
 }
 
 export interface PinterestItem {

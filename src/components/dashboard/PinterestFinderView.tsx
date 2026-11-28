@@ -936,15 +936,25 @@ export function PinterestFinderView({
 
                   {/* External Link */}
                   <div className="flex items-center justify-between text-xs pt-1">
-                    <a
-                      href={item.pin_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-zinc-400 hover:text-rose-400 inline-flex items-center gap-1 transition"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                      <span>Pinterest'te Aç</span>
-                    </a>
+                    {item.pin_url ? (
+                      <a
+                        href={item.pin_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-zinc-400 hover:text-rose-400 inline-flex items-center gap-1 transition"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        <span>Pinterest'te Aç</span>
+                      </a>
+                    ) : (
+                      <span
+                        className="text-zinc-500 inline-flex items-center gap-1"
+                        title="Pinterest benzer video akışında pin bağlantısı paylaşılmıyor"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        <span>Benzer video (pin linki yok)</span>
+                      </span>
+                    )}
 
                     <button
                       onClick={() => {
@@ -1121,15 +1131,22 @@ export function PinterestFinderView({
                   <div className="p-3 space-y-2">
                     <h4 className="text-xs font-medium text-white line-clamp-2">{sim.title}</h4>
                     <div className="flex items-center justify-between pt-1">
-                      <a
-                        href={sim.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-[11px] text-zinc-400 hover:text-white flex items-center gap-1"
-                      >
-                        <ExternalLink className="w-3 h-3" />
-                        <span>İncele</span>
-                      </a>
+                      {sim.url ? (
+                        <a
+                          href={sim.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[11px] text-zinc-400 hover:text-white flex items-center gap-1"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                          <span>İncele</span>
+                        </a>
+                      ) : (
+                        <span className="text-[11px] text-zinc-500 flex items-center gap-1" title="Benzer video akışında pin linki paylaşılmıyor">
+                          <ExternalLink className="w-3 h-3" />
+                          <span>Link yok</span>
+                        </span>
+                      )}
                       <button
                         onClick={() => handleAddSimilarPin(similarModalItem, sim)}
                         className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white transition flex items-center gap-1"

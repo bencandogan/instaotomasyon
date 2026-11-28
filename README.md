@@ -120,6 +120,37 @@ gcloud run deploy ffmpeg-montage-worker \
 
 ---
 
+## 🧭 Pinterest Benzer Video Çekme (Chrome/Chromium Gereksinimi)
+
+Pinterest, pin detay sayfasının altında gösterilen **benzer videolar** akışını (`v3RelatedPinsForPinSeoQuery`) yalnızca gerçek tarayıcı oturumlarında sunuyor. Sunucu tarafı `fetch` istekleri Pinterest tarafından HTML sayfasına veya `403`'e düşürülüyor.
+
+Bu yüzden uygulama, `puppeteer-core` ile sunucuda kurulu Chrome/Chromium'u kullanarak pin sayfasını açar ve benzer videoları toplar (`src/lib/services/pinterestBrowserService.ts`).
+
+```bash
+# Debian / Ubuntu VPS
+sudo apt-get update && sudo apt-get install -y chromium
+
+# Chrome farklı bir yolda ise (.env.local)
+PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+```
+
+| Değişken | Varsayılan | Açıklama |
+| --- | --- | --- |
+| `PINTEREST_RELATED_MAX_VIDEOS` | `60` | Pin başına toplanacak en fazla benzer video |
+| `PINTEREST_BROWSER_CONCURRENCY` | `2` | Aynı anda açılacak tarayıcı sayfası sayısı |
+| `PUPPETEER_EXECUTABLE_PATH` | otomatik | Chrome/Chromium yürütülebilir dosya yolu |
+
+Durum kontrolü: `GET /api/pinterest/scan` → `{ chromeAvailable, executablePath, defaultMaxVideos }`
+
+> ⚠️ **Datacenter / VPS IP uyarısı:** Pinterest, hosting IP'lerine pin detay sayfasında "giriş duvarı" gösterip benzer video akışını boş döndürebiliyor (`edges: []`). Bu durumda iki seçenek var:
+>
+> 1. **Residential proxy:** `PINTEREST_PROXY_SERVER=http://host:port` (+ gerekirse `PINTEREST_PROXY_USERNAME` / `PINTEREST_PROXY_PASSWORD`). Proxy varsa bant genişliği için görsel/video istekleri varsayılan olarak engellenir (`PINTEREST_BLOCK_MEDIA=0` ile kapatılabilir).
+> 2. **Oturum çerezleri:** Pinterest'e giriş yapılmış tarayıcıdan alınan çerezler `PINTEREST_COOKIES` (JSON dizi) olarak tanımlanır.
+
+Bu durumda tarama çökmez: ana video kaydedilir, sistem loglarına `PINTEREST_RELATED_FETCH_FAILED` uyarısı (proxy/çerez önerisiyle) yazılır.
+
+---
+
 ## 🔒 Güvenlik Notları
 - API anahtarları asla istemciye açık (raw string) olarak sızdırılmaz.
 - `firestore.rules` ile tüm koleksiyonlar yalnızca kimliği doğrulanmış yöneticilere açıktır.

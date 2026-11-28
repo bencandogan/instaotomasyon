@@ -876,10 +876,20 @@ export default function AdminDashboardPage() {
         return merged;
       });
 
-      showToast(
-        'success',
-        `Harika! "${mainResult.pin_title}" ve keşfedilen benzersiz videolar doğrudan "Ticari Kullanıma Uygun" olarak koleksiyona eklendi!`
-      );
+      const similarCount = mainResult.similar_pins?.length || 0;
+      if (data.chromeAvailable === false) {
+        showToast(
+          'error',
+          'Sunucuda Chrome/Chromium bulunamadı: yalnızca ana video eklendi. Benzer videolar için sunucuya Chromium kurun.'
+        );
+      } else if (similarCount === 0) {
+        showToast('info', `"${mainResult.pin_title}" eklendi ancak bu pinin altında önerilen video bulunamadı.`);
+      } else {
+        showToast(
+          'success',
+          `Harika! "${mainResult.pin_title}" ve ${similarCount} benzer video "Ticari Kullanıma Uygun" olarak koleksiyona eklendi.`
+        );
+      }
       loadAllData();
       return data.result;
     } catch (err: unknown) {
@@ -979,7 +989,8 @@ export default function AdminDashboardPage() {
 
       showToast(
         'success',
-        `Tebrikler! ${urls.length} bağlantıdan toplam ${uniqueBulkItems.length} gerçek Pinterest videosu koleksiyona eklendi!`
+        `Tebrikler! ${urls.length} bağlantıdan toplam ${uniqueBulkItems.length} gerçek Pinterest videosu koleksiyona eklendi!` +
+          (typeof data.similarPinsCount === 'number' ? ` (${data.similarPinsCount} tanesi benzer video akışından)` : '')
       );
       loadAllData();
     } catch (err: unknown) {
