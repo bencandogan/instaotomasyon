@@ -3,7 +3,6 @@ import { NextResponse } from 'next/server';
 export async function GET() {
   const pinId = '1083256516653451643';
 
-  // 1. Önce pin sayfasını çağır ve taze çerezleri (cookies) al
   const pageRes = await fetch(`https://tr.pinterest.com/pin/${pinId}/`, {
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36',
@@ -22,7 +21,6 @@ export async function GET() {
     }
   }
 
-  // 2. Exact GraphQL call with queryHash: "22d4b5f01f07c1be71875fc3555a98a630cb701ea7090b818d4dc456325515e6"
   const body = JSON.stringify({
     queryHash: "22d4b5f01f07c1be71875fc3555a98a630cb701ea7090b818d4dc456325515e6",
     variables: {
@@ -49,32 +47,18 @@ export async function GET() {
     body: body,
   });
 
-  const json = await gqlRes.json();
-  const edges = json.data?.v3RelatedPinsForPinSeoQuery?.data?.connection?.edges || [];
-  const videoList: any[] = [];
-
-  for (const edge of edges) {
-    const node = edge.node;
-    let vidUrl = '';
-    const vList = node?.videos?.videoList;
-    if (vList) {
-      vidUrl = vList.vEXP7?.url || vList.v720P?.url || vList.vHLSV4?.url || vList.vHLSV3MOBILE?.url;
-    }
-    const thumb = node.images_736x?.url || node.images_orig?.url;
-    if (vidUrl) {
-      videoList.push({
-        id: node.entityId,
-        thumb: thumb,
-        video: vidUrl.slice(0, 60),
-        duration: node.videos?.duration,
-      });
-    }
+  const text = await gqlRes.text();
+  let json = null;
+  try {
+    json = JSON.parse(text);
+  } catch (e) {
+    json = { rawText: text.slice(0, 1000) };
   }
 
   return NextResponse.json({
     status: gqlRes.status,
-    totalRecommendations: edges.length,
-    videoRecommendationsCount: videoList.length,
-    sampleVideos: videoList.slice(0, 5),
+    csrf,
+    cookieHeader,
+    response: json,
   });
 }
