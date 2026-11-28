@@ -517,19 +517,20 @@ export class PinterestService {
         }
 
         // 1.B: Pinterest Relay & Doğrudan HTML Video / MP4 Çıkarma (Sunucu tarafı ve Vercel için garanti)
+        const cleanHtml = pageHtml.replaceAll('\\/', '/');
         if (!videoUrl || videoUrl.includes('mixkit.co')) {
-          const mp4Match = pageHtml.match(/https:\/\/(?:v1|v)\.pinimg\.com\/videos\/[^"'\s\\]+\.mp4/i);
+          const mp4Match = cleanHtml.match(/https:\/\/(?:v1|v)\.pinimg\.com\/videos\/[^"'\s\\]+\.mp4/i);
           if (mp4Match) {
             videoUrl = mp4Match[0];
           } else {
-            const hlsMatch = pageHtml.match(/https:\/\/(?:v1|v)\.pinimg\.com\/videos\/[^"'\s\\]+\.m3u8/i);
+            const hlsMatch = cleanHtml.match(/https:\/\/(?:v1|v)\.pinimg\.com\/videos\/[^"'\s\\]+\.m3u8/i);
             if (hlsMatch) videoUrl = hlsMatch[0];
           }
         }
 
         // Doğrudan video kapağı (Thumbnail) çıkarma
         if (!thumbnailUrl || thumbnailUrl.includes('unsplash.com')) {
-          const thumbMatch = pageHtml.match(/https:\/\/i\.pinimg\.com\/videos\/thumbnails\/[^"'\s\\]+\.jpg/i);
+          const thumbMatch = cleanHtml.match(/https:\/\/i\.pinimg\.com\/videos\/thumbnails\/[^"'\s\\]+\.jpg/i);
           if (thumbMatch) {
             thumbnailUrl = thumbMatch[0];
           } else {
