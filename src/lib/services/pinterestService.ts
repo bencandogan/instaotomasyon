@@ -465,7 +465,7 @@ export class PinterestService {
     let embedHtml = '';
     let creator = '@pinterest_creator';
     let duration = '0:14';
-    let appVersion = '4e9f794';
+    let appVersion = '78f39b6';
 
     // Pin ID tespiti (ilk kontrol)
     const idMatch = trimmed.match(/\/pin\/(\d+)/);
@@ -622,7 +622,7 @@ export class PinterestService {
               'Accept': 'application/json, text/javascript, */*, q=0.01',
               'X-Requested-With': 'XMLHttpRequest',
               'X-Pinterest-AppState': 'active',
-              'X-Pinterest-PWS-Handler': 'www/[username]/[slug].js',
+              'X-Pinterest-PWS-Handler': 'www/pin/[id].js',
               'Referer': `https://www.pinterest.com/pin/${pinId}/`,
             },
           });
@@ -678,11 +678,7 @@ export class PinterestService {
                 vList.vHLSV4?.url ||
                 vList.vHLSV3_MOBILE?.url;
 
-              if (directMp4) {
-                recVideo = directMp4;
-              } else if (hls) {
-                recVideo = hls;
-              }
+              recVideo = directMp4 || hls || '';
 
               const dMs =
                 vList.V_HLSV4?.duration ||
@@ -696,8 +692,14 @@ export class PinterestService {
             // SADECE kendi bağımsız videosu olan önerileri ekle
             if (!recVideo) continue;
 
-            // Tekrarlanan video akışlarını önle (aynı URL'yi iki kez ekleme)
-            if (realRecommendations.some((r) => r.video_url === recVideo)) continue;
+            // Orijinal video ile aynıysa veya zaten eklendiyse atla
+            if (
+              recVideo === videoUrl ||
+              (it.id && pinId && String(it.id) === String(pinId)) ||
+              realRecommendations.some((r) => r.video_url === recVideo)
+            ) {
+              continue;
+            }
 
             const recAuthor = it.pinner?.username ? `@${it.pinner.username}` : creator;
             const recPinId = it.id ? `pin-${it.id}` : `pin-rec-${pinId}-${realRecommendations.length}`;
@@ -726,119 +728,8 @@ export class PinterestService {
       }
     }
 
-    // 4. Eğer RelatedPinFeedResource az video verdiyse veya Vercel datacenter IP'sinden boş döndüyse,
-    // Pinterest'in canlı BaseSearchResource video arama servisini kullanarak 50 adet gerçek video tamamla!
-    if (realRecommendations.length < 50) {
-      try {
-        const queryTerms = [
-          detectedCategory,
-          'video reels',
-          title && title !== 'Pinterest Video İçeriği' ? title.split(/\s+/).slice(0, 3).join(' ') : ''
-        ].filter(Boolean).join(' ');
-
-        let searchBookmark: string | null = null;
-        let searchPage = 1;
-        const maxSearchPages = 2; // 2 sayfa x 25 = 50 video
-
-        while (realRecommendations.length < 50 && searchPage <= maxSearchPages) {
-          const sObj: Record<string, unknown> = {
-            options: {
-              query: queryTerms,
-              scope: 'pins',
-              page_size: 25,
-              filters: 'videos',
-              bookmarks: searchBookmark ? [searchBookmark] : [],
-            },
-            context: { app_version: appVersion }
-          };
-          const sUrl: string = `https://www.pinterest.com/resource/BaseSearchResource/get/?source_url=%2Fsearch%2Fpins%2F%3Fq%3D${encodeURIComponent(queryTerms)}&data=${encodeURIComponent(JSON.stringify(sObj))}`;
-          const sRes = await fetch(sUrl, {
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-              'Accept': 'application/json',
-              'X-Requested-With': 'XMLHttpRequest',
-              'X-Pinterest-AppState': 'active',
-              'X-Pinterest-PWS-Handler': 'www/[username]/[slug].js',
-            }
-          });
-
-          if (!sRes.ok) break;
-
-          const sJson: any = await sRes.json();
-          const sResults = sJson.resource_response?.data?.results || [];
-          searchBookmark = sJson.resource_response?.bookmark;
-
-          for (const it of sResults) {
-            let recVideo = '';
-            let vList = it.videos?.video_list;
-            if (!vList && it.story_pin_data?.pages) {
-              for (const p of it.story_pin_data.pages) {
-                if (p.blocks) {
-                  for (const b of p.blocks) {
-                    if (b.video?.video_list) {
-                      vList = b.video.video_list;
-                      break;
-                    }
-                  }
-                }
-                if (vList) break;
-              }
-            }
-            if (vList) {
-              recVideo = vList.V_EXP7?.url || vList.V_720P?.url || vList.V_HLSV4?.url || vList.V_HLSV3_MOBILE?.url;
-            }
-            if (!recVideo) continue;
-            // Orijinal video ile veya halihazırda eklenenlerle aynı videoyu/pini engelle
-            if (
-              recVideo === videoUrl ||
-              (it.id && pinId && String(it.id) === String(pinId)) ||
-              realRecommendations.some((r) => r.video_url === recVideo || (it.id && r.id === `pin-${it.id}`))
-            ) {
-              continue;
-            }
-
-            const recThumb =
-              it.images?.['736x']?.url ||
-              it.images?.['474x']?.url ||
-              it.images?.['236x']?.url ||
-              it.images?.orig?.url ||
-              thumbnailUrl;
-
-            const cleanRecTitle =
-              (typeof it.title === 'string' && it.title.trim()) ||
-              (typeof it.grid_title === 'string' && it.grid_title.trim()) ||
-              (typeof it.description === 'string' && it.description.trim().slice(0, 70)) ||
-              (typeof it.auto_alt_text === 'string' && it.auto_alt_text.trim().slice(0, 70)) ||
-              `${detectedCategory} Video Reels #${realRecommendations.length + 1}`;
-
-            const recAuthor = it.pinner?.username ? `@${it.pinner.username}` : creator;
-            const recPinId = it.id ? `pin-${it.id}` : `pin-rec-${pinId || 'search'}-${realRecommendations.length}`;
-            const recPinUrl = it.id ? `https://tr.pinterest.com/pin/${it.id}/` : `https://tr.pinterest.com/pin/${pinId || ''}/?rec=${realRecommendations.length}`;
-
-            realRecommendations.push({
-              id: recPinId,
-              title: cleanRecTitle,
-              url: recPinUrl,
-              thumbnail_url: recThumb,
-              video_url: recVideo,
-              category: detectedCategory,
-              age_filter: chosenAge || '25–30 yaş görünümü',
-              author: recAuthor,
-              duration: '0:15',
-            });
-
-            if (realRecommendations.length >= 50) break;
-          }
-
-          if (!searchBookmark || searchBookmark === '-end-') break;
-          searchPage++;
-        }
-      } catch (searchErr) {
-        console.warn('Pinterest BaseSearchResource video arama fallback hatası:', searchErr);
-      }
-    }
-
-    // Sadece gerçek Pinterest önerileri varsa ekle; asla hafızadan sahte/şablon video ekleme!
+    // Kullanıcı isteği doğrultusunda: Kesinlikle kategori/arama bazlı video aranmaz!
+    // Sadece ve sadece tıklanan bu videonun altında Pinterest'in önerdiği doğrudan videolar eklenir.
     const finalSimilarPins: SimilarPinItem[] = realRecommendations.length > 0 ? realRecommendations : [];
 
     return {
