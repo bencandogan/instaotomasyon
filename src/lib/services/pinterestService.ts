@@ -466,6 +466,8 @@ export class PinterestService {
     let creator = '@pinterest_creator';
     let duration = '0:14';
     let appVersion = '78f39b6';
+    let cookieHeader = '';
+    let csrf = '';
 
     // Pin ID tespiti (ilk kontrol)
     const idMatch = trimmed.match(/\/pin\/(\d+)/);
@@ -475,7 +477,7 @@ export class PinterestService {
     try {
       const pageRes = await fetch(trimmed, {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36',
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
           'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7',
         },
@@ -483,6 +485,14 @@ export class PinterestService {
       });
 
       if (pageRes.ok) {
+        const rawCookies = pageRes.headers.getSetCookie ? pageRes.headers.getSetCookie() : [];
+        cookieHeader = rawCookies.map((c) => c.split(';')[0]).join('; ');
+        for (const c of rawCookies) {
+          if (c.startsWith('csrftoken=')) {
+            csrf = c.split(';')[0].replace('csrftoken=', '');
+            break;
+          }
+        }
         const finalUrl = pageRes.url || trimmed;
         if (!pinId) {
           const finalMatch = finalUrl.match(/\/pin\/(\d+)/);
@@ -593,138 +603,68 @@ export class PinterestService {
     // URL ve başlığa göre akıllı kategori tespiti
     const detectedCategory: PinterestCategory = chosenCategory || this.autoDetectCategory(trimmed, title, description);
 
-    // 3. Pinterest Sayfasındaki GERÇEK Önerileri (RelatedPinFeedResource) Sayfalama ile 50-60 Adet Çekme
+    // 3. Pinterest Sayfasındaki GERÇEK Önerileri (GraphQL GatedCloseupRelatedPinsFeedQuery) ile Doğrudan Çekme
     const realRecommendations: SimilarPinItem[] = [];
     if (pinId) {
       try {
-        let bookmark: string | null = null;
-        let page = 1;
-        const maxPages = 5; // 5 sayfa boyunca sayfalama ile 50 adet gerçek öneri videosu çeker
-        const targetCount = 50;
+        const gqlRes = await fetch('https://tr.pinterest.com/_/graphql/', {
+          method: 'POST',
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36',
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Origin': 'https://tr.pinterest.com',
+            'Referer': `https://tr.pinterest.com/pin/${pinId}/`,
+            'X-Pinterest-AppState': 'active',
+            'X-Pinterest-GraphQL-Name': 'GatedCloseupRelatedPinsFeedQuery',
+            'X-Pinterest-PWS-Handler': 'www/pin/[id].js',
+            'X-Pinterest-Source-Url': `/pin/${pinId}/`,
+            'X-CSRFToken': csrf,
+            'Cookie': cookieHeader,
+          },
+          body: JSON.stringify({
+            queryHash: '22d4b5f01f07c1be71875fc3555a98a630cb701ea7090b818d4dc456325515e6',
+            variables: { count: 100, pinId },
+          }),
+        });
 
-        while (realRecommendations.length < targetCount && page <= maxPages) {
-          const dataObj = {
-            options: {
-              pin: pinId,
-              bookmarks: bookmark ? [bookmark] : [],
-            },
-            context: {
-              app_version: appVersion,
-            },
-          };
+        if (gqlRes.ok) {
+          const json = await gqlRes.json();
+          const edges = json.data?.v3RelatedPinsForPinSeoQuery?.data?.connection?.edges || [];
 
-          const dataStr = encodeURIComponent(JSON.stringify(dataObj));
-          const relUrl = `https://www.pinterest.com/resource/RelatedPinFeedResource/get/?source_url=%2Fpin%2F${pinId}%2F&data=${dataStr}`;
+          for (const edge of edges) {
+            const node = edge?.node;
+            if (!node) continue;
+            const vList = node.videos?.videoList;
+            if (!vList) continue;
 
-          const relRes = await fetch(relUrl, {
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-              'Accept': 'application/json, text/javascript, */*, q=0.01',
-              'X-Requested-With': 'XMLHttpRequest',
-              'X-Pinterest-AppState': 'active',
-              'X-Pinterest-PWS-Handler': 'www/pin/[id].js',
-              'Referer': `https://www.pinterest.com/pin/${pinId}/`,
-            },
-          });
+            const vidUrl = vList.vEXP7?.url || vList.v720P?.url || vList.vHLSV4?.url || vList.vHLSV3MOBILE?.url;
+            if (!vidUrl || vidUrl === videoUrl) continue;
+            if (realRecommendations.some((r) => r.video_url === vidUrl)) continue;
 
-          if (!relRes.ok) break;
-
-          const relData = await relRes.json();
-          const items = relData.resource_response?.data || [];
-          bookmark = relData.resource_response?.bookmark;
-
-          for (let i = 0; i < items.length; i++) {
-            const it = items[i];
-            if (!it.images && !it.videos && !it.story_pin_data) continue;
-
-            const recThumb =
-              it.images?.['736x']?.url ||
-              it.images?.['474x']?.url ||
-              it.images?.['236x']?.url ||
-              it.images?.orig?.url ||
-              thumbnailUrl;
-
-            const cleanRecTitle =
-              (typeof it.title === 'string' && it.title.trim()) ||
-              (typeof it.grid_title === 'string' && it.grid_title.trim()) ||
-              (typeof it.description === 'string' && it.description.trim().slice(0, 70)) ||
-              (typeof it.auto_alt_text === 'string' && it.auto_alt_text.trim().slice(0, 70)) ||
-              `${title} Önerisi #${realRecommendations.length + 1}`;
-
-            // Video çözümleme: Hem doğrudan it.videos hem de story_pin_data bloklarını tara
-            let recVideo = '';
-            let recDur = '0:15';
-
-            let vList = it.videos?.video_list;
-            if (!vList && it.story_pin_data?.pages) {
-              for (const p of it.story_pin_data.pages) {
-                if (p.blocks) {
-                  for (const b of p.blocks) {
-                    if (b.video?.video_list) {
-                      vList = b.video.video_list;
-                      break;
-                    }
-                  }
-                }
-                if (vList) break;
-              }
-            }
-
-            if (vList) {
-              const directMp4 = vList.V_EXP7?.url || vList.V_720P?.url || vList.v720P?.url;
-              const hls =
-                vList.V_HLSV4?.url ||
-                vList.V_HLSV3_MOBILE?.url ||
-                vList.vHLSV4?.url ||
-                vList.vHLSV3_MOBILE?.url;
-
-              recVideo = directMp4 || hls || '';
-
-              const dMs =
-                vList.V_HLSV4?.duration ||
-                vList.V_HLSV3_MOBILE?.duration ||
-                vList.V_720P?.duration ||
-                15000;
-              const dSec = Math.round(dMs / 1000);
-              recDur = `0:${dSec < 10 ? '0' + dSec : dSec}`;
-            }
-
-            // SADECE kendi bağımsız videosu olan önerileri ekle
-            if (!recVideo) continue;
-
-            // Orijinal video ile aynıysa veya zaten eklendiyse atla
-            if (
-              recVideo === videoUrl ||
-              (it.id && pinId && String(it.id) === String(pinId)) ||
-              realRecommendations.some((r) => r.video_url === recVideo)
-            ) {
-              continue;
-            }
-
-            const recAuthor = it.pinner?.username ? `@${it.pinner.username}` : creator;
-            const recPinId = it.id ? `pin-${it.id}` : `pin-rec-${pinId}-${realRecommendations.length}`;
-            const recPinUrl = it.id ? `https://tr.pinterest.com/pin/${it.id}/` : `https://tr.pinterest.com/pin/${pinId}/?rec=${realRecommendations.length}`;
+            const recId = node.entityId || node.id || `rec-${realRecommendations.length}`;
+            const thumb = node.images_736x?.url || node.images_orig?.url || node.images_474x?.url || thumbnailUrl;
+            const durSec = node.videos?.duration ? Math.round(node.videos.duration / 1000) : 15;
+            const recTitle = node.title || node.grid_title || `${title} - Benzer Video #${realRecommendations.length + 1}`;
+            const recAuthor = node.pinner?.username ? `@${node.pinner.username}` : creator;
 
             realRecommendations.push({
-              id: recPinId,
-              title: cleanRecTitle,
-              url: recPinUrl,
-              thumbnail_url: recThumb,
-              video_url: recVideo,
+              id: `pin-${recId}`,
+              title: recTitle,
+              url: `https://tr.pinterest.com/pin/${recId}/`,
+              thumbnail_url: thumb,
+              video_url: vidUrl,
               category: detectedCategory,
               age_filter: chosenAge || '25–30 yaş görünümü',
               author: recAuthor,
-              duration: recDur,
+              duration: `0:${durSec < 10 ? '0' + durSec : durSec}`,
             });
 
-            if (realRecommendations.length >= targetCount) break;
+            if (realRecommendations.length >= 50) break;
           }
-
-          if (!bookmark || bookmark === '-end-') break;
-          page++;
         }
       } catch (err) {
-        console.warn('Pinterest gerçek önerileri çekme hatası:', err);
+        console.warn('Pinterest GraphQL önerileri çekme hatası:', err);
       }
     }
 
