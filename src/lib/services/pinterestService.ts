@@ -599,8 +599,8 @@ export class PinterestService {
       try {
         let bookmark: string | null = null;
         let page = 1;
-        const maxPages = 2; // Vercel 10s timeout sınırına takılmamak için hızlı ve hafif (15-20 video)
-        const targetCount = 20;
+        const maxPages = 5; // 5 sayfa boyunca sayfalama ile 50 adet gerçek öneri videosu çeker
+        const targetCount = 50;
 
         while (realRecommendations.length < targetCount && page <= maxPages) {
           const dataObj = {
@@ -648,6 +648,7 @@ export class PinterestService {
               (typeof it.title === 'string' && it.title.trim()) ||
               (typeof it.grid_title === 'string' && it.grid_title.trim()) ||
               (typeof it.description === 'string' && it.description.trim().slice(0, 70)) ||
+              (typeof it.auto_alt_text === 'string' && it.auto_alt_text.trim().slice(0, 70)) ||
               `${title} Önerisi #${realRecommendations.length + 1}`;
 
             // Video çözümleme: Hem doğrudan it.videos hem de story_pin_data bloklarını tara
@@ -699,10 +700,11 @@ export class PinterestService {
             if (realRecommendations.some((r) => r.video_url === recVideo)) continue;
 
             const recAuthor = it.pinner?.username ? `@${it.pinner.username}` : creator;
-            const recPinUrl = it.id ? `https://tr.pinterest.com/pin/${it.id}/` : `https://tr.pinterest.com/pin/${pinId}/`;
+            const recPinId = it.id ? `pin-${it.id}` : `pin-rec-${pinId}-${realRecommendations.length}`;
+            const recPinUrl = it.id ? `https://tr.pinterest.com/pin/${it.id}/` : `https://tr.pinterest.com/pin/${pinId}/?rec=${realRecommendations.length}`;
 
             realRecommendations.push({
-              id: `pin-rec-${pinId}-${realRecommendations.length}`,
+              id: recPinId,
               title: cleanRecTitle,
               url: recPinUrl,
               thumbnail_url: recThumb,

@@ -19,8 +19,11 @@ export function normalizePinUrl(url?: string): string {
  */
 export function extractPinNumber(urlOrId?: string): string {
   if (!urlOrId) return '';
-  const match = urlOrId.match(/\/pin\/(\d+)/) || urlOrId.match(/^pin-(?:sim-|rec-)?(\d+)/);
-  return match ? match[1] : '';
+  const urlMatch = urlOrId.match(/\/pin\/(\d{10,25})/);
+  if (urlMatch) return urlMatch[1];
+  const idMatch = urlOrId.match(/^pin-(\d{10,25})$/);
+  if (idMatch) return idMatch[1];
+  return '';
 }
 
 /**
@@ -41,18 +44,22 @@ export function normalizeVideoKey(videoUrl?: string): string {
  * or same video always produces the exact same ID, preventing duplicate items.
  */
 export function getDeterministicPinId(pinUrl?: string, videoUrl?: string, fallbackId?: string): string {
+  if (fallbackId && fallbackId.startsWith('pin-') && !fallbackId.startsWith('pin-rec-') && !fallbackId.startsWith('pin-sim-')) {
+    return fallbackId;
+  }
+
   const pinNum = extractPinNumber(pinUrl) || extractPinNumber(fallbackId);
   if (pinNum) return `pin-${pinNum}`;
 
   const vidKey = normalizeVideoKey(videoUrl);
   if (vidKey) {
-    const cleanVid = vidKey.replace(/[^a-z0-9]/gi, '_').slice(-24);
+    const cleanVid = vidKey.replace(/[^a-z0-9]/gi, '_').slice(-30);
     return `pin-vid-${cleanVid}`;
   }
 
   const urlKey = normalizePinUrl(pinUrl);
   if (urlKey) {
-    const cleanUrl = urlKey.replace(/[^a-z0-9]/gi, '_').slice(-24);
+    const cleanUrl = urlKey.replace(/[^a-z0-9]/gi, '_').slice(-30);
     return `pin-url-${cleanUrl}`;
   }
 
@@ -86,7 +93,7 @@ export function deduplicatePins<T extends {
     if (pinNum && seenPinNumbers.has(pinNum)) continue;
 
     const cleanUrl = normalizePinUrl(item.pin_url);
-    if (cleanUrl && seenUrls.has(cleanUrl)) continue;
+    if (cleanUrl && cleanUrl.length > 25 && seenUrls.has(cleanUrl)) continue;
 
     const vidKey = normalizeVideoKey(item.video_url);
     if (vidKey && seenVideos.has(vidKey)) continue;
@@ -94,7 +101,7 @@ export function deduplicatePins<T extends {
     if (item.id && seenIds.has(item.id)) continue;
 
     if (pinNum) seenPinNumbers.add(pinNum);
-    if (cleanUrl) seenUrls.add(cleanUrl);
+    if (cleanUrl && cleanUrl.length > 25) seenUrls.add(cleanUrl);
     if (vidKey) seenVideos.add(vidKey);
     if (item.id) seenIds.add(item.id);
 
