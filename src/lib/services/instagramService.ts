@@ -269,6 +269,51 @@ export class InstagramService {
   }
 
   /**
+   * Hesabın son 24 saat içinde yayınlanmış aktif bir Story'si olup olmadığını kontrol eder.
+   * Instagram Graph API üzerinden gerçek yayındaki aktif hikayeleri sorgular.
+   */
+  static async hasActiveStoryInLast24Hours(accountId?: string): Promise<{ hasActive: boolean; count: number; error?: string }> {
+    try {
+      const acc = accountId
+        ? await PlatformRepository.getInstagramAccountById(accountId)
+        : await PlatformRepository.getActiveInstagramAccount();
+
+      const token = process.env.META_ACCESS_TOKEN || process.env.INSTAGRAM_ACCESS_TOKEN || DEFAULT_META_ACCESS_TOKEN;
+      const igUserId = acc?.instagramAccountId || process.env.INSTAGRAM_ACCOUNT_ID || DEFAULT_INSTAGRAM_ACCOUNT_ID;
+
+      // 1. Önce geçmiş kayıtlara bak
+      const history = await PlatformRepository.getStoryHistory(acc?.id);
+      const nowMs = Date.now();
+      const recentHistoryStory = history.find((h) => {
+        if (!h.publishedAt) return false;
+        const diffHours = (nowMs - new Date(h.publishedAt).getTime()) / (1000 * 60 * 60);
+        return diffHours < 23.5;
+      });
+
+      if (recentHistoryStory) {
+        return { hasActive: true, count: 1 };
+      }
+
+      // 2. Canlı Instagram Graph API kontrolü: GET /{ig-user-id}/stories
+      if (token && igUserId && acc?.isConnected) {
+        const url = `${this.BASE_URL}/${igUserId}/stories?access_token=${token}&fields=id,timestamp`;
+        const res = await fetch(url);
+        if (res.ok) {
+          const data = await res.json();
+          const activeStories = data.data || [];
+          if (activeStories.length > 0) {
+            return { hasActive: true, count: activeStories.length };
+          }
+        }
+      }
+
+      return { hasActive: false, count: 0 };
+    } catch {
+      return { hasActive: false, count: 0 };
+    }
+  }
+
+  /**
    * Instagram Story (Hikaye) Yayınlama (24 Saatte 1 Otomatik veya Manuel)
    * POST /{ig-user-id}/media?media_type=STORIES&image_url=...
    * POST /{ig-user-id}/media_publish?creation_id=...
@@ -278,10 +323,30 @@ export class InstagramService {
     storyLink: string;
     linkText?: string;
     accountId?: string;
+    forcePublish?: boolean;
   }): Promise<{ success: boolean; storyId?: string; permalink?: string; error?: string }> {
     const acc = options.accountId
       ? await PlatformRepository.getInstagramAccountById(options.accountId)
       : await PlatformRepository.getActiveInstagramAccount();
+
+    // 24 SAATTE EN FAZLA 1 STORY KORUMASI (forcePublish true değilse kesin kontrol)
+    if (!options.forcePublish) {
+      const activeCheck = await this.hasActiveStoryInLast24Hours(acc?.id);
+      if (activeCheck.hasActive) {
+        const skipMsg = `Story paylaşımı atlandı: [${acc?.instagramUsername || 'Hesap'}] hesabında son 24 saat içinde paylaşılan aktif story zaten mevcut. 24 saat kuralı korundu.`;
+        await PlatformRepository.log(
+          'INFO',
+          'INSTAGRAM',
+          'STORY_SKIPPED_24H_RULE',
+          skipMsg,
+          { account: acc?.instagramUsername, activeCount: activeCheck.count }
+        );
+        return {
+          success: false,
+          error: `Hesapta son 24 saat içinde yayınlanmış aktif hikaye bulunuyor. 24 saatte yalnızca 1 hikaye paylaşılabilir.`,
+        };
+      }
+    }
 
     const token = process.env.META_ACCESS_TOKEN || process.env.INSTAGRAM_ACCESS_TOKEN || DEFAULT_META_ACCESS_TOKEN;
     const igUserId = acc?.instagramAccountId || process.env.INSTAGRAM_ACCOUNT_ID || DEFAULT_INSTAGRAM_ACCOUNT_ID;

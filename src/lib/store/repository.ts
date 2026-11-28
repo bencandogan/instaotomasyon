@@ -198,7 +198,7 @@ export const DEFAULT_INSTAGRAM_ACCOUNTS: InstagramAccount[] = [
     browserProfileId: 'browser_iso_main',
     browserFingerprint: 'Chrome 123 (İzole Ana Oturum - Webkit/537.36)',
     autoPublishEnabled: true,
-    autoStoryEnabled: true,
+    autoStoryEnabled: false,
     oauthConnected: true,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -271,12 +271,13 @@ Her video 9:16 formatında, 8-15 saniye aralığında, kancası (hook) güçlü,
 
 // Varsayılan Otomatik Story (Hikaye) Ayarları
 export const DEFAULT_STORY_SETTINGS: StoryAutomationSettings = {
-  isEnabled: true,
+  isEnabled: false, // Kullanıcı isteği olmadan otomatik hikaye atılmasını önle
   dailyPublishTime: '14:00', // 24 saatte bir her gün saat 14:00
   storyImageUrl: 'https://images.unsplash.com/photo-1515934751635-c81c6bc9a2d8?w=1080&h=1920&fit=crop&q=80',
   storyLink: 'https://play.google.com/store/apps/details?id=com.evlilikilanlari.app',
   linkText: 'Uygulamayı İndir 📲',
   showLinkSticker: true,
+  lastPublishedAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 };
 

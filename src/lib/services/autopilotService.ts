@@ -208,7 +208,7 @@ export class AutopilotService {
       }
 
       // =========================================================================
-      // ADIM 2: 24 SAATTE 1 STORY OTOMATİK YAYINLAMA
+      // ADIM 2: 24 SAATTE 1 STORY OTOMATİK YAYINLAMA (KESİN 24 SAAT VE AKTİF STORY KORUMASI)
       // =========================================================================
       try {
         const storySettings = await PlatformRepository.getStorySettings();
@@ -216,18 +216,18 @@ export class AutopilotService {
           let shouldPublishStory = false;
 
           if (!storySettings.lastPublishedAt) {
-            // Hiç yayınlanmamışsa hemen yayınla
-            shouldPublishStory = true;
+            // İlk başlangıçta hemen ardı ardına atmaması için bugünün zamanını kaydet ve bekle
+            storySettings.lastPublishedAt = nowIso;
+            await PlatformRepository.saveStorySettings(storySettings);
           } else {
             const lastPubMs = new Date(storySettings.lastPublishedAt).getTime();
             const elapsedHours = (nowTimeMs - lastPubMs) / (1000 * 60 * 60);
 
-            // 23 saatten fazla geçmişse ve belirlenen saat dilimine gelinmişse (veya 24 saati geçmişse)
+            // En az 23 saat geçmiş olmalı ve hedef saat gelmiş olmalı (veya 24 saati doldurmuş olmalı)
             if (elapsedHours >= 24) {
               shouldPublishStory = true;
             } else if (elapsedHours >= 23) {
-              // Hedef saat kontrolü (örn: 14:00)
-              const [targetH, targetM] = (storySettings.dailyPublishTime || '14:00').split(':').map(Number);
+              const [targetH] = (storySettings.dailyPublishTime || '14:00').split(':').map(Number);
               const istanbulHours = (now.getUTCHours() + 3) % 24;
               if (istanbulHours >= targetH) {
                 shouldPublishStory = true;
@@ -236,36 +236,47 @@ export class AutopilotService {
           }
 
           if (shouldPublishStory) {
-            messages.push('24 saatlik Story yayın zamanı geldi. Bağlı tüm hesaplara yayına alınıyor...');
             const allAccounts = await PlatformRepository.getInstagramAccounts();
             const targetStoryAccounts = allAccounts.filter(
-              (acc) => acc.isConnected && acc.autoStoryEnabled !== false
+              (acc) => acc.isConnected && acc.autoStoryEnabled === true
             );
-            const storyList = targetStoryAccounts.length > 0 ? targetStoryAccounts : [await PlatformRepository.getActiveInstagramAccount()];
 
-            for (const sAcc of storyList) {
-              try {
-                const storyRes = await InstagramService.publishStory({
-                  imageUrl: storySettings.storyImageUrl,
-                  storyLink: storySettings.storyLink,
-                  linkText: storySettings.linkText || 'Uygulamayı İndir 📲',
-                  accountId: sAcc.id,
-                });
+            if (targetStoryAccounts.length > 0) {
+              messages.push('24 saatlik Story yayın kontrolü yapılıyor...');
 
-                if (storyRes.success) {
-                  publishedStoryCount++;
-                  messages.push(`24 saatlik Story paylaşıldı [${sAcc.name} - ${sAcc.instagramUsername}]`);
-                } else {
-                  messages.push(`Story uyarısı [${sAcc.instagramUsername}]: ${storyRes.error}`);
+              for (const sAcc of targetStoryAccounts) {
+                try {
+                  // Instagram'da halen aktif story var mı kontrol et (Günde max 1 kuralı)
+                  const activeCheck = await InstagramService.hasActiveStoryInLast24Hours(sAcc.id);
+                  if (activeCheck.hasActive) {
+                    messages.push(`[${sAcc.instagramUsername}] Son 24 saat içinde zaten aktif story mevcut (${activeCheck.count} adet). 24 saat kuralı korundu, yeni story atılmadı.`);
+                    storySettings.lastPublishedAt = nowIso;
+                    await PlatformRepository.saveStorySettings(storySettings);
+                    continue;
+                  }
+
+                  const storyRes = await InstagramService.publishStory({
+                    imageUrl: storySettings.storyImageUrl,
+                    storyLink: storySettings.storyLink,
+                    linkText: storySettings.linkText || 'Uygulamayı İndir 📲',
+                    accountId: sAcc.id,
+                    forcePublish: false,
+                  });
+
+                  if (storyRes.success) {
+                    publishedStoryCount++;
+                    messages.push(`24 saatlik Story paylaşıldı [${sAcc.name} - ${sAcc.instagramUsername}]`);
+                    storySettings.lastPublishedAt = nowIso;
+                    await PlatformRepository.saveStorySettings(storySettings);
+                  } else {
+                    messages.push(`Story kontrolü [${sAcc.instagramUsername}]: ${storyRes.error}`);
+                  }
+                } catch (sErr: unknown) {
+                  const sMsg = sErr instanceof Error ? sErr.message : String(sErr);
+                  messages.push(`Story gönderim hatası [${sAcc.instagramUsername}]: ${sMsg}`);
                 }
-              } catch (sErr: unknown) {
-                const sMsg = sErr instanceof Error ? sErr.message : String(sErr);
-                messages.push(`Story gönderim hatası [${sAcc.instagramUsername}]: ${sMsg}`);
               }
             }
-
-            storySettings.lastPublishedAt = nowIso;
-            await PlatformRepository.saveStorySettings(storySettings);
           }
         }
       } catch (err: unknown) {

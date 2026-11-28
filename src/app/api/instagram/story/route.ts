@@ -44,6 +44,7 @@ export async function POST(req: Request) {
         storyLink,
         linkText,
         accountId,
+        forcePublish: Boolean(body.forcePublish ?? true),
       });
 
       if (!result.success) {
