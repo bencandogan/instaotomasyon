@@ -467,9 +467,9 @@ export class PinterestService {
     let duration = '0:14';
     let appVersion = '4e9f794';
 
-    // Pin ID tespiti
+    // Pin ID tespiti (ilk kontrol)
     const idMatch = trimmed.match(/\/pin\/(\d+)/);
-    const pinId = idMatch ? idMatch[1] : null;
+    let pinId = idMatch ? idMatch[1] : null;
 
     // 1. Gerçek Pinterest Sayfasını ve Video Snippet'ını Çekme
     try {
@@ -479,9 +479,15 @@ export class PinterestService {
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
           'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7',
         },
+        redirect: 'follow',
       });
 
       if (pageRes.ok) {
+        const finalUrl = pageRes.url || trimmed;
+        if (!pinId) {
+          const finalMatch = finalUrl.match(/\/pin\/(\d+)/);
+          if (finalMatch) pinId = finalMatch[1];
+        }
         const pageHtml = await pageRes.text();
 
         // VideoObject JSON-LD extraction
@@ -518,14 +524,14 @@ export class PinterestService {
 
         // 1.B: Pinterest Relay & Doğrudan HTML Video / MP4 Çıkarma (Sunucu tarafı ve Vercel için garanti)
         const cleanHtml = pageHtml.replaceAll('\\/', '/');
-        if (!videoUrl || videoUrl.includes('mixkit.co')) {
-          const mp4Match = cleanHtml.match(/https:\/\/(?:v1|v)\.pinimg\.com\/videos\/[^"'\s\\]+\.mp4/i);
-          if (mp4Match) {
-            videoUrl = mp4Match[0];
-          } else {
-            const hlsMatch = cleanHtml.match(/https:\/\/(?:v1|v)\.pinimg\.com\/videos\/[^"'\s\\]+\.m3u8/i);
-            if (hlsMatch) videoUrl = hlsMatch[0];
-          }
+        
+        // Her zaman doğrudan MP4 varsa (720p HD MP4 veya expMp4) MP4'ü tercih et
+        const mp4Match = cleanHtml.match(/https:\/\/(?:v1|v)\.pinimg\.com\/videos\/[^"'\s\\]+\.mp4/i);
+        if (mp4Match) {
+          videoUrl = mp4Match[0];
+        } else if (!videoUrl || videoUrl.includes('mixkit.co')) {
+          const hlsMatch = cleanHtml.match(/https:\/\/(?:v1|v)\.pinimg\.com\/videos\/[^"'\s\\]+\.m3u8/i);
+          if (hlsMatch) videoUrl = hlsMatch[0];
         }
 
         // Doğrudan video kapağı (Thumbnail) çıkarma

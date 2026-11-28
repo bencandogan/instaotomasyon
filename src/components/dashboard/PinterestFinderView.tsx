@@ -48,21 +48,24 @@ function PinterestVideoPlayer({ src, poster }: { src: string; poster?: string })
     if (!video || !src) return;
 
     let hlsInstance: Hls | null = null;
+    const effectiveSrc = (src.includes('.m3u8') && src.includes('pinimg.com'))
+      ? `/api/video/proxy?url=${encodeURIComponent(src)}`
+      : src;
 
     if (src.includes('.m3u8')) {
       if (Hls.isSupported()) {
         hlsInstance = new Hls({ enableWorker: true });
-        hlsInstance.loadSource(src);
+        hlsInstance.loadSource(effectiveSrc);
         hlsInstance.attachMedia(video);
         hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
           video.play().catch(() => {});
         });
       } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        video.src = src;
+        video.src = effectiveSrc;
         video.play().catch(() => {});
       }
     } else {
-      video.src = src;
+      video.src = effectiveSrc;
       video.play().catch(() => {});
     }
 

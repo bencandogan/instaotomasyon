@@ -158,7 +158,22 @@ export default function AdminDashboardPage() {
       }
       if (genRes?.general) setGeneralSettings(genRes.general);
       if (logsRes?.logs) setLogs(logsRes.logs);
-      if (pinRes?.items) setPinterestItems(pinRes.items);
+      if (pinRes?.items && pinRes.items.length > 0) {
+        setPinterestItems(pinRes.items);
+        try {
+          localStorage.setItem('insta_pinterest_items', JSON.stringify(pinRes.items));
+        } catch {}
+      } else {
+        try {
+          const localPins = localStorage.getItem('insta_pinterest_items');
+          if (localPins) {
+            const parsed = JSON.parse(localPins);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setPinterestItems(parsed);
+            }
+          }
+        } catch {}
+      }
     } catch (e) {
       console.error('Veri yükleme hatası:', e);
     }
@@ -171,6 +186,15 @@ export default function AdminDashboardPage() {
       setIsAuthenticated(true);
       loadAllData();
     }
+    try {
+      const localPins = localStorage.getItem('insta_pinterest_items');
+      if (localPins) {
+        const parsed = JSON.parse(localPins);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setPinterestItems(parsed);
+        }
+      }
+    } catch {}
     setAuthChecking(false);
   }, []);
 
@@ -740,6 +764,16 @@ export default function AdminDashboardPage() {
       const savedData = await saveRes.json();
       if (!saveRes.ok) throw new Error(savedData.error);
 
+      // State ve LocalStorage'ı hemen kalıcı güncelle (Serverless bellek sıfırlanmasına karşı güvence)
+      const finalItems = savedData.items || itemsToSave;
+      setPinterestItems((prev) => {
+        const merged = [...finalItems, ...prev.filter((p) => !finalItems.some((n: any) => n.id === p.id))];
+        try {
+          localStorage.setItem('insta_pinterest_items', JSON.stringify(merged));
+        } catch {}
+        return merged;
+      });
+
       showToast(
         'success',
         `Harika! "${mainResult.pin_title}" ve keşfedilen ${itemsToSave.length - 1} adet benzer video (Toplam ${itemsToSave.length} video) doğrudan "Ticari Kullanıma Uygun" olarak koleksiyona eklendi!`
@@ -820,6 +854,16 @@ export default function AdminDashboardPage() {
         });
         const savedData = await saveRes.json();
         if (!saveRes.ok) throw new Error(savedData.error);
+
+        // State ve LocalStorage'ı hemen kalıcı güncelle
+        const finalItems = savedData.items || allItemsToSave;
+        setPinterestItems((prev) => {
+          const merged = [...finalItems, ...prev.filter((p) => !finalItems.some((n: any) => n.id === p.id))];
+          try {
+            localStorage.setItem('insta_pinterest_items', JSON.stringify(merged));
+          } catch {}
+          return merged;
+        });
       }
 
       showToast(
