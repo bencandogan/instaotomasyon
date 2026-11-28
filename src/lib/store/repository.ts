@@ -557,7 +557,7 @@ export class PlatformRepository {
     }
 
     // Sadece gerçekten atanmış videosu olan kuyruk ögelerini döndür; [Planlanan Slot] sahte kayıtlarını temizle
-    return list.filter((item) => item.videoId && !item.id.startsWith('queue-slot-') && !item.videoTitle.includes('[Planlanan Slot]'));
+    return list.filter((item) => item.videoId && !item.id.startsWith('queue-slot-') && !item.videoTitle?.includes('[Planlanan Slot]'));
   }
 
   static async saveQueueItem(item: PublishQueueItem): Promise<void> {

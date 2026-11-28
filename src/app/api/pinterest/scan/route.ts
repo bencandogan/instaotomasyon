@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { PinterestService } from '@/lib/services/pinterestService';
 
+export const maxDuration = 60; // Vercel Serverless Function timeout (60 saniye)
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();

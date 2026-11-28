@@ -979,7 +979,7 @@ export default function AdminDashboardPage() {
 
       showToast(
         'success',
-        `Tebrikler! ${urls.length} bağlantıdan videolar doğrudan "Ticari Kullanıma Uygun" olarak koleksiyona eklendi!`
+        `Tebrikler! ${urls.length} bağlantıdan toplam ${uniqueBulkItems.length} gerçek Pinterest videosu koleksiyona eklendi!`
       );
       loadAllData();
     } catch (err: unknown) {
