@@ -265,18 +265,19 @@ export function PinterestFinderView({
 
   const handleScanSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!urlInput.trim()) return;
+    const rawInput = urlInput.trim();
+    const urlsFromInput = rawInput
+      ? rawInput.split('\n').map((u) => u.trim()).filter((u) => u.length > 5)
+      : [];
+    const urls = urlsFromInput.length > 0 ? urlsFromInput : savedUrls.filter((u) => u.length > 5);
 
-    if (isBulkMode) {
-      const urls = urlInput
-        .split('\n')
-        .map((u) => u.trim())
-        .filter((u) => u.length > 5);
-      await persistUrls(urls); // Linkleri sistemde kalıcı tut, sayfa yenilense de silinmesin!
-      await onScanBulk(urls, undefined, undefined, shuffleScan);
+    if (urls.length === 0) return;
+
+    await persistUrls(urls);
+    if (urls.length === 1) {
+      await onScanUrl(urls[0], undefined, undefined);
     } else {
-      await persistUrls([urlInput.trim()]); // Tek linki de kalıcı tut!
-      await onScanUrl(urlInput.trim(), undefined, undefined);
+      await onScanBulk(urls, undefined, undefined, shuffleScan);
     }
   };
 
@@ -623,7 +624,7 @@ export function PinterestFinderView({
           <div className="flex justify-end pt-1">
             <button
               type="submit"
-              disabled={isLoading || !urlInput.trim()}
+              disabled={isLoading || (!urlInput.trim() && savedUrls.length === 0)}
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white text-xs font-semibold shadow-lg shadow-rose-950/40 transition disabled:opacity-50 cursor-pointer"
             >
               {isLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}

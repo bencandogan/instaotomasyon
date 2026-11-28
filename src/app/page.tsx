@@ -158,22 +158,25 @@ export default function AdminDashboardPage() {
       }
       if (genRes?.general) setGeneralSettings(genRes.general);
       if (logsRes?.logs) setLogs(logsRes.logs);
-      if (pinRes?.items && pinRes.items.length > 0) {
-        setPinterestItems(pinRes.items);
-        try {
-          localStorage.setItem('insta_pinterest_items', JSON.stringify(pinRes.items));
-        } catch {}
-      } else {
-        try {
-          const localPins = localStorage.getItem('insta_pinterest_items');
-          if (localPins) {
-            const parsed = JSON.parse(localPins);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              setPinterestItems(parsed);
-            }
-          }
-        } catch {}
-      }
+      // Pinterest pinlerini sample-1 ve sample-2 sahte şablonlarından temizle ve yerel hafızayla birleştir
+      const apiPins = (pinRes?.items || []).filter((p: any) => p.id !== 'pin-sample-1' && p.id !== 'pin-sample-2');
+      let localPins: any[] = [];
+      try {
+        const localPinsStr = localStorage.getItem('insta_pinterest_items');
+        if (localPinsStr) {
+          localPins = JSON.parse(localPinsStr).filter((p: any) => p.id !== 'pin-sample-1' && p.id !== 'pin-sample-2');
+        }
+      } catch {}
+
+      const pinMap = new Map<string, any>();
+      for (const p of localPins) pinMap.set(p.id, p);
+      for (const p of apiPins) pinMap.set(p.id, p);
+      const cleanPins = Array.from(pinMap.values());
+
+      setPinterestItems(cleanPins);
+      try {
+        localStorage.setItem('insta_pinterest_items', JSON.stringify(cleanPins));
+      } catch {}
     } catch (e) {
       console.error('Veri yükleme hatası:', e);
     }
