@@ -149,14 +149,53 @@ export default function AdminDashboardPage() {
       if (statsRes?.stats) setStats(statsRes.stats);
       if (catRes?.categories) setCategories(catRes.categories);
       if (videosRes?.videos) setVideos(videosRes.videos);
-      if (queueRes?.queue) setQueue(queueRes.queue);
+      if (queueRes?.queue) {
+        const realQueue = (queueRes.queue as PublishQueueItem[]).filter(
+          (q) => q.videoId && !q.id.startsWith('queue-slot-') && !q.videoTitle?.includes('[Planlanan Slot]')
+        );
+        setQueue(realQueue);
+        try {
+          localStorage.setItem('insta_publish_queue', JSON.stringify(realQueue));
+        } catch {}
+      }
       if (instaRes?.settings) setInstagramSettings(instaRes.settings);
       if (accountsRes?.accounts) {
         setAccounts(accountsRes.accounts);
         setActiveAccount(accountsRes.activeAccount || accountsRes.accounts[0] || null);
       }
       if (outroRes?.settings) setBrandOutroSettings(outroRes.settings);
-      if (storyRes?.settings) setStorySettings(storyRes.settings);
+
+      // Story ayarlarını yerel hafıza ve sunucudan kalıcı olarak al ve koru
+      let savedLocalStory: Partial<StoryAutomationSettings> | null = null;
+      try {
+        const localStoryStr = localStorage.getItem('insta_story_settings');
+        if (localStoryStr) savedLocalStory = JSON.parse(localStoryStr);
+      } catch {}
+
+      if (storyRes?.settings || savedLocalStory) {
+        const baseStory = storyRes?.settings || {};
+        const mergedStory: StoryAutomationSettings = {
+          isEnabled: false,
+          dailyPublishTime: '14:00',
+          storyImageUrl: 'https://images.unsplash.com/photo-1515934751635-c81c6bc9a2d8?w=1080&h=1920&fit=crop&q=80',
+          storyLink: 'https://play.google.com/store/apps/details?id=com.evlilikilanlari.app',
+          linkText: 'Uygulamayı İndir 📲',
+          showLinkSticker: true,
+          ...baseStory,
+          ...(savedLocalStory || {}),
+        };
+        // Kullanıcının kaydettiği özel değerleri koru
+        if (savedLocalStory?.storyImageUrl) mergedStory.storyImageUrl = savedLocalStory.storyImageUrl;
+        if (savedLocalStory?.storyLink) mergedStory.storyLink = savedLocalStory.storyLink;
+        if (savedLocalStory?.linkText) mergedStory.linkText = savedLocalStory.linkText;
+        if (savedLocalStory?.isEnabled !== undefined) mergedStory.isEnabled = savedLocalStory.isEnabled;
+        if (savedLocalStory?.dailyPublishTime) mergedStory.dailyPublishTime = savedLocalStory.dailyPublishTime;
+
+        setStorySettings(mergedStory);
+        try {
+          localStorage.setItem('insta_story_settings', JSON.stringify(mergedStory));
+        } catch {}
+      }
       if (storyRes?.history) setStoryHistory(storyRes.history);
       if (aiRes?.settings) setAiSettings(aiRes.settings);
       if (costRes?.limits) {
@@ -201,6 +240,22 @@ export default function AdminDashboardPage() {
           const cleanLocal = deduplicatePins(parsed);
           setPinterestItems(cleanLocal);
           localStorage.setItem('insta_pinterest_items', JSON.stringify(cleanLocal));
+        }
+      }
+    } catch {}
+    try {
+      const localStory = localStorage.getItem('insta_story_settings');
+      if (localStory) {
+        const parsed = JSON.parse(localStory);
+        if (parsed) setStorySettings(parsed);
+      }
+    } catch {}
+    try {
+      const localQueue = localStorage.getItem('insta_publish_queue');
+      if (localQueue) {
+        const parsed = JSON.parse(localQueue);
+        if (Array.isArray(parsed)) {
+          setQueue(parsed.filter((q: any) => q.videoId && !q.id.startsWith('queue-slot-') && !q.videoTitle?.includes('[Planlanan Slot]')));
         }
       }
     } catch {}
@@ -646,17 +701,46 @@ export default function AdminDashboardPage() {
   const handleSaveStorySettings = async (settings: Partial<StoryAutomationSettings>, accountId?: string) => {
     setIsLoading(true);
     try {
+      // 1. Tarayıcı hafızasına anında kaydet (Asla kaybolmaz)
+      const current = storySettings || {
+        isEnabled: false,
+        dailyPublishTime: '14:00',
+        storyImageUrl: 'https://images.unsplash.com/photo-1515934751635-c81c6bc9a2d8?w=1080&h=1920&fit=crop&q=80',
+        storyLink: 'https://play.google.com/store/apps/details?id=com.evlilikilanlari.app',
+        linkText: 'Uygulamayı İndir 📲',
+        showLinkSticker: true,
+      };
+      const merged: StoryAutomationSettings = {
+        ...current,
+        ...settings,
+        updatedAt: new Date().toISOString(),
+      };
+      setStorySettings(merged);
+      try {
+        localStorage.setItem('insta_story_settings', JSON.stringify(merged));
+        if (accountId) {
+          localStorage.setItem(`insta_story_settings_${accountId}`, JSON.stringify(merged));
+        }
+      } catch {}
+
+      // 2. Sunucuya gönder
       const res = await fetch('/api/instagram/story', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'save_settings', settings, accountId }),
+        body: JSON.stringify({ action: 'save_settings', settings: merged, accountId }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      setStorySettings(data.settings);
+      if (data.settings) {
+        const finalSettings = { ...merged, ...data.settings };
+        setStorySettings(finalSettings);
+        try {
+          localStorage.setItem('insta_story_settings', JSON.stringify(finalSettings));
+        } catch {}
+      }
+
       showToast('success', 'Otomatik Story ayarları başarıyla kaydedildi.');
-      loadAllData();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       showToast('error', `Story ayarları kaydedilemedi: ${msg}`);
@@ -1433,7 +1517,17 @@ export default function AdminDashboardPage() {
                   await handlePublishNow(videoId);
                 }}
                 onDeleteQueueItem={async (id) => {
-                  await fetch(`/api/queue?id=${id}`, { method: 'DELETE' });
+                  setQueue((prev) => {
+                    const updated = prev.filter((q) => q.id !== id);
+                    try {
+                      localStorage.setItem('insta_publish_queue', JSON.stringify(updated));
+                    } catch {}
+                    return updated;
+                  });
+                  try {
+                    await fetch(`/api/queue?id=${id}`, { method: 'DELETE' });
+                  } catch {}
+                  showToast('info', 'Slot kuyruktan kaldırıldı.');
                   loadAllData();
                 }}
                 onSaveDefaultSlots={async (slots) => {

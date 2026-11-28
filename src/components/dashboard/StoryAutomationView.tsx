@@ -63,6 +63,18 @@ export function StoryAutomationView({
   const [showLinkSticker, setShowLinkSticker] = useState(settings.showLinkSticker ?? true);
   const [uploading, setUploading] = useState(false);
 
+  // Settings prop değiştiğinde form alanlarını anında güncelle
+  React.useEffect(() => {
+    if (settings) {
+      if (settings.isEnabled !== undefined) setIsEnabled(settings.isEnabled);
+      if (settings.dailyPublishTime) setDailyPublishTime(settings.dailyPublishTime);
+      if (settings.storyImageUrl) setStoryImageUrl(settings.storyImageUrl);
+      if (settings.storyLink) setStoryLink(settings.storyLink);
+      if (settings.linkText) setLinkText(settings.linkText);
+      if (settings.showLinkSticker !== undefined) setShowLinkSticker(settings.showLinkSticker);
+    }
+  }, [settings]);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -75,7 +87,13 @@ export function StoryAutomationView({
       reader.onload = async () => {
         const base64 = reader.result as string;
         const uploadedUrl = await onUploadImage(base64, file.name);
-        setStoryImageUrl(uploadedUrl);
+        const finalUrl = uploadedUrl || base64;
+        setStoryImageUrl(finalUrl);
+        try {
+          const localStr = localStorage.getItem('insta_story_settings');
+          const current = localStr ? JSON.parse(localStr) : {};
+          localStorage.setItem('insta_story_settings', JSON.stringify({ ...current, storyImageUrl: finalUrl }));
+        } catch {}
         setUploading(false);
       };
       reader.readAsDataURL(file);
@@ -86,17 +104,18 @@ export function StoryAutomationView({
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    await onSaveSettings(
-      {
-        isEnabled,
-        dailyPublishTime,
-        storyImageUrl,
-        storyLink,
-        linkText,
-        showLinkSticker,
-      },
-      selectedAccountId
-    );
+    const updated = {
+      isEnabled,
+      dailyPublishTime,
+      storyImageUrl,
+      storyLink,
+      linkText,
+      showLinkSticker,
+    };
+    try {
+      localStorage.setItem('insta_story_settings', JSON.stringify(updated));
+    } catch {}
+    await onSaveSettings(updated, selectedAccountId);
   };
 
   const handleDirectPublish = async () => {

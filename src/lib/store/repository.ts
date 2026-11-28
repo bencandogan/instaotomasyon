@@ -345,21 +345,8 @@ class MemoryDataStore {
       timestamp: now.toISOString(),
     });
 
-    this.generalSettings.defaultPublishSlots.forEach((slot, idx) => {
-      this.queue.push({
-        id: `queue-slot-${idx + 1}`,
-        videoId: '',
-        videoTitle: `[Planlanan Slot] ${slot.label} (${slot.time})`,
-        thumbnailUrl: '',
-        scheduledTime: `${todayStr}T${slot.time}:00+03:00`,
-        slotLabel: `${slot.label} - ${slot.time}`,
-        status: 'pending',
-        attempts: 0,
-        maxAttempts: 3,
-        createdAt: now.toISOString(),
-        updatedAt: now.toISOString(),
-      });
-    });
+    // Kuyruk başlangıçta temiz ve boş olmalıdır; videosuz sahte slotlar üretilmez
+    this.queue = [];
   }
 }
 
@@ -552,18 +539,25 @@ export class PlatformRepository {
 
   // --- PUBLISH QUEUE ---
   static async getQueue(): Promise<PublishQueueItem[]> {
+    let list: PublishQueueItem[] = [];
     try {
       const db = getAdminDb();
       if (db) {
         const snap = await db.collection('publish_queue').orderBy('scheduledTime', 'asc').get();
         if (!snap.empty) {
-          return snap.docs.map((d: any) => d.data() as PublishQueueItem);
+          list = snap.docs.map((d: any) => d.data() as PublishQueueItem);
         }
       }
     } catch {
       // fallback
     }
-    return memoryStore.queue;
+
+    if (list.length === 0) {
+      list = [...memoryStore.queue];
+    }
+
+    // Sadece gerçekten atanmış videosu olan kuyruk ögelerini döndür; [Planlanan Slot] sahte kayıtlarını temizle
+    return list.filter((item) => item.videoId && !item.id.startsWith('queue-slot-') && !item.videoTitle.includes('[Planlanan Slot]'));
   }
 
   static async saveQueueItem(item: PublishQueueItem): Promise<void> {
@@ -1211,13 +1205,18 @@ export class PlatformRepository {
     try {
       const db = getAdminDb();
       if (db) {
-        const doc = await db.collection('story_settings').doc(docId).get();
+        let doc = await db.collection('story_settings').doc(docId).get();
+        if (!doc.exists && docId !== 'config') {
+          doc = await db.collection('story_settings').doc('config').get();
+        }
         if (doc.exists) {
-          return {
+          const data = doc.data() as StoryAutomationSettings;
+          memoryStore.storySettings = {
             ...DEFAULT_STORY_SETTINGS,
-            ...(doc.data() as StoryAutomationSettings),
+            ...data,
             selectedAccountId: acc?.id,
           };
+          return memoryStore.storySettings;
         }
       }
     } catch {
@@ -1249,6 +1248,9 @@ export class PlatformRepository {
       const db = getAdminDb();
       if (db) {
         await db.collection('story_settings').doc(docId).set(memoryStore.storySettings, { merge: true });
+        if (docId !== 'config') {
+          await db.collection('story_settings').doc('config').set(memoryStore.storySettings, { merge: true });
+        }
       }
     } catch {
       // fallback
