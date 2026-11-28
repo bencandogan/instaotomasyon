@@ -59,6 +59,13 @@ import {
   StoryAutomationSettings,
   StoryPublishItem,
 } from '@/types';
+import {
+  deduplicatePins,
+  getDeterministicPinId,
+  extractPinNumber,
+  normalizePinUrl,
+  normalizeVideoKey,
+} from '@/lib/utils/pinDeduplication';
 
 export default function AdminDashboardPage() {
   const [activeTab, setActiveTab] = useState<NavTab>('overview');
@@ -158,20 +165,17 @@ export default function AdminDashboardPage() {
       }
       if (genRes?.general) setGeneralSettings(genRes.general);
       if (logsRes?.logs) setLogs(logsRes.logs);
-      // Pinterest pinlerini sample-1 ve sample-2 sahte şablonlarından temizle ve yerel hafızayla birleştir
-      const apiPins = (pinRes?.items || []).filter((p: any) => p.id !== 'pin-sample-1' && p.id !== 'pin-sample-2');
+      // Pinterest pinlerini sahte şablonlardan ve tekrarlardan kesin olarak arındır
+      const apiPins = (pinRes?.items || []);
       let localPins: any[] = [];
       try {
         const localPinsStr = localStorage.getItem('insta_pinterest_items');
         if (localPinsStr) {
-          localPins = JSON.parse(localPinsStr).filter((p: any) => p.id !== 'pin-sample-1' && p.id !== 'pin-sample-2');
+          localPins = JSON.parse(localPinsStr);
         }
       } catch {}
 
-      const pinMap = new Map<string, any>();
-      for (const p of localPins) pinMap.set(p.id, p);
-      for (const p of apiPins) pinMap.set(p.id, p);
-      const cleanPins = Array.from(pinMap.values());
+      const cleanPins = deduplicatePins([...apiPins, ...localPins]);
 
       setPinterestItems(cleanPins);
       try {
@@ -194,7 +198,9 @@ export default function AdminDashboardPage() {
       if (localPins) {
         const parsed = JSON.parse(localPins);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setPinterestItems(parsed);
+          const cleanLocal = deduplicatePins(parsed);
+          setPinterestItems(cleanLocal);
+          localStorage.setItem('insta_pinterest_items', JSON.stringify(cleanLocal));
         }
       }
     } catch {}
@@ -721,28 +727,34 @@ export default function AdminDashboardPage() {
       const mainResult = data.result;
       const itemsToSave: any[] = [];
 
+      const detId = getDeterministicPinId(mainResult.pin_url, mainResult.video_url, mainResult.id);
+
       // 1. Girdiğimiz ana URL'yi doğrudan "Ticari Kullanıma Uygun" ve onaylı yap
       itemsToSave.push({
         ...mainResult,
-        id: mainResult.id || `pin-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        id: detId,
         duration: mainResult.duration || '0:14',
         usage_permission_status: 'Ticari kullanım uygun',
         approval_status: 'approved',
         source_license: 'Standart Pinterest İçeriği (Ticari Kullanım Uygun)',
       });
 
-      // 2. Girdiğimiz URL'nin taranan TÜM benzer videolarını (similar_pins) doğrudan bağımsız video olarak koleksiyona ekle!
+      // 2. Girdiğimiz URL'nin taranan benzer videolarından sadece farklı/bağımsız video olanları ekle
       if (mainResult.similar_pins && Array.isArray(mainResult.similar_pins) && mainResult.similar_pins.length > 0) {
         for (const sim of mainResult.similar_pins) {
+          if (!sim.video_url || sim.video_url === mainResult.video_url || sim.video_url.includes('mixkit.co')) {
+            continue;
+          }
+          const simDetId = getDeterministicPinId(sim.url, sim.video_url, sim.id);
           itemsToSave.push({
-            id: `pin-sim-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            id: simDetId,
             pin_url: sim.url,
             pin_title: sim.title,
             pin_description: `"${mainResult.pin_title}" temasına uygun keşfedilen benzer video`,
             category: sim.category || mainResult.category,
             age_filter: sim.age_filter || mainResult.age_filter,
             thumbnail_url: sim.thumbnail_url,
-            video_url: sim.video_url || mainResult.video_url,
+            video_url: sim.video_url,
             embed_html: '',
             duration: sim.duration || '0:15',
             added_at: new Date().toISOString(),
@@ -759,19 +771,21 @@ export default function AdminDashboardPage() {
         }
       }
 
+      const uniqueItemsToSave = deduplicatePins(itemsToSave);
+
       // Toplu kaydet
       const saveRes = await fetch('/api/pinterest/items', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: itemsToSave }),
+        body: JSON.stringify({ items: uniqueItemsToSave }),
       });
       const savedData = await saveRes.json();
       if (!saveRes.ok) throw new Error(savedData.error);
 
       // State ve LocalStorage'ı hemen kalıcı güncelle (Serverless bellek sıfırlanmasına karşı güvence)
-      const finalItems = savedData.items || itemsToSave;
+      const finalItems = savedData.items || uniqueItemsToSave;
       setPinterestItems((prev) => {
-        const merged = [...finalItems, ...prev.filter((p) => !finalItems.some((n: any) => n.id === p.id))];
+        const merged = deduplicatePins([...finalItems, ...prev]);
         try {
           localStorage.setItem('insta_pinterest_items', JSON.stringify(merged));
         } catch {}
@@ -780,7 +794,7 @@ export default function AdminDashboardPage() {
 
       showToast(
         'success',
-        `Harika! "${mainResult.pin_title}" ve keşfedilen ${itemsToSave.length - 1} adet benzer video (Toplam ${itemsToSave.length} video) doğrudan "Ticari Kullanıma Uygun" olarak koleksiyona eklendi!`
+        `Harika! "${mainResult.pin_title}" ve keşfedilen benzersiz videolar doğrudan "Ticari Kullanıma Uygun" olarak koleksiyona eklendi!`
       );
       loadAllData();
       return data.result;
@@ -812,28 +826,34 @@ export default function AdminDashboardPage() {
       const allItemsToSave: any[] = [];
 
       for (const mainResult of data.results || []) {
+        const detId = getDeterministicPinId(mainResult.pin_url, mainResult.video_url, mainResult.id);
+
         // Ana pin
         allItemsToSave.push({
           ...mainResult,
-          id: mainResult.id || `pin-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          id: detId,
           duration: mainResult.duration || '0:14',
           usage_permission_status: 'Ticari kullanım uygun',
           approval_status: 'approved',
           source_license: 'Standart Pinterest İçeriği (Ticari Kullanım Uygun)',
         });
 
-        // Benzer pinler
+        // Benzer pinler (sadece bağımsız ve farklı videolar)
         if (mainResult.similar_pins && Array.isArray(mainResult.similar_pins)) {
           for (const sim of mainResult.similar_pins) {
+            if (!sim.video_url || sim.video_url === mainResult.video_url || sim.video_url.includes('mixkit.co')) {
+              continue;
+            }
+            const simDetId = getDeterministicPinId(sim.url, sim.video_url, sim.id);
             allItemsToSave.push({
-              id: `pin-sim-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+              id: simDetId,
               pin_url: sim.url,
               pin_title: sim.title,
               pin_description: `"${mainResult.pin_title}" temasına uygun benzer video`,
               category: sim.category || mainResult.category,
               age_filter: sim.age_filter || mainResult.age_filter,
               thumbnail_url: sim.thumbnail_url,
-              video_url: sim.video_url || mainResult.video_url,
+              video_url: sim.video_url,
               embed_html: '',
               duration: sim.duration || '0:15',
               added_at: new Date().toISOString(),
@@ -851,19 +871,21 @@ export default function AdminDashboardPage() {
         }
       }
 
-      if (allItemsToSave.length > 0) {
+      const uniqueBulkItems = deduplicatePins(allItemsToSave);
+
+      if (uniqueBulkItems.length > 0) {
         const saveRes = await fetch('/api/pinterest/items', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ items: allItemsToSave }),
+          body: JSON.stringify({ items: uniqueBulkItems }),
         });
         const savedData = await saveRes.json();
         if (!saveRes.ok) throw new Error(savedData.error);
 
         // State ve LocalStorage'ı hemen kalıcı güncelle
-        const finalItems = savedData.items || allItemsToSave;
+        const finalItems = savedData.items || uniqueBulkItems;
         setPinterestItems((prev) => {
-          const merged = [...finalItems, ...prev.filter((p) => !finalItems.some((n: any) => n.id === p.id))];
+          const merged = deduplicatePins([...finalItems, ...prev]);
           try {
             localStorage.setItem('insta_pinterest_items', JSON.stringify(merged));
           } catch {}
@@ -873,7 +895,7 @@ export default function AdminDashboardPage() {
 
       showToast(
         'success',
-        `Tebrikler! ${urls.length} bağlantıdan toplam ${allItemsToSave.length} adet video ve benzeri doğrudan "Ticari Kullanıma Uygun" olarak koleksiyona eklendi!`
+        `Tebrikler! ${urls.length} bağlantıdan videolar doğrudan "Ticari Kullanıma Uygun" olarak koleksiyona eklendi!`
       );
       loadAllData();
     } catch (err: unknown) {
@@ -969,8 +991,31 @@ export default function AdminDashboardPage() {
       const res = await fetch(`/api/pinterest/items/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Silinemedi');
 
-      setPinterestItems((prev) => prev.filter((item) => item.id !== id));
+      setPinterestItems((prev) => {
+        const target = prev.find((p) => p.id === id);
+        const targetPinNum = target ? (extractPinNumber(target.pin_url) || extractPinNumber(target.id)) : '';
+        const targetUrl = target ? normalizePinUrl(target.pin_url) : '';
+        const targetVid = target ? normalizeVideoKey(target.video_url) : '';
+
+        const updated = prev.filter((item) => {
+          if (item.id === id) return false;
+          if (targetPinNum) {
+            const pNum = extractPinNumber(item.pin_url) || extractPinNumber(item.id);
+            if (pNum && pNum === targetPinNum) return false;
+          }
+          if (targetUrl && normalizePinUrl(item.pin_url) === targetUrl) return false;
+          if (targetVid && normalizeVideoKey(item.video_url) === targetVid) return false;
+          return true;
+        });
+
+        try {
+          localStorage.setItem('insta_pinterest_items', JSON.stringify(updated));
+        } catch {}
+        return updated;
+      });
+
       showToast('info', 'Pinterest içeriği silindi.');
+      loadAllData();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       showToast('error', `Silme hatası: ${msg}`);

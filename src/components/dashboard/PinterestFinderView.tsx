@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Compass,
   Search,
@@ -38,6 +38,7 @@ import {
   SimilarPinItem,
   GeneratedVideo
 } from '@/types';
+import { deduplicatePins, getDeterministicPinId } from '@/lib/utils/pinDeduplication';
 import Hls from 'hls.js';
 
 function PinterestVideoPlayer({ src, poster }: { src: string; poster?: string }) {
@@ -142,6 +143,11 @@ export function PinterestFinderView({
   onRefresh,
   isLoading,
 }: PinterestFinderProps) {
+  // Çift ve tekrarlanan videoları kesin olarak ayıkla
+  const uniqueItems = useMemo(() => {
+    return deduplicatePins(items);
+  }, [items]);
+
   // Input State
   const [urlInput, setUrlInput] = useState('');
   const [isBulkMode, setIsBulkMode] = useState(false);
@@ -188,6 +194,15 @@ export function PinterestFinderView({
       })
       .catch(() => {});
   }, []);
+
+  // Tarayıcı hafızasındaki çift/tekrarlanan kayıtları otomatik olarak temizle
+  React.useEffect(() => {
+    if (items.length > 0 && uniqueItems.length > 0 && items.length !== uniqueItems.length) {
+      try {
+        localStorage.setItem('insta_pinterest_items', JSON.stringify(uniqueItems));
+      } catch {}
+    }
+  }, [items, uniqueItems]);
 
   // Linkleri hem localStorage'a hem de backend veritabanına kalıcı kaydetme fonksiyonu
   const persistUrls = async (urlsToSave: string[]) => {
@@ -246,7 +261,7 @@ export function PinterestFinderView({
   const [notesDraft, setNotesDraft] = useState('');
 
   // Filtering Logic
-  const filteredItems = items.filter((item) => {
+  const filteredItems = uniqueItems.filter((item) => {
     if (showArchived ? !item.archive_status : item.archive_status) return false;
     if (filterFavorite && !item.favorite) return false;
     if (filterCategory !== 'all' && item.category !== filterCategory) return false;
@@ -288,15 +303,16 @@ export function PinterestFinderView({
   };
 
   const handleAddSimilarPin = async (parent: PinterestItem, sim: SimilarPinItem) => {
+    if (!sim.video_url || sim.video_url === parent.video_url || sim.video_url.includes('mixkit.co')) return;
     const newItem: PinterestItem = {
-      id: `pin-sim-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      id: getDeterministicPinId(sim.url, sim.video_url, sim.id),
       pin_url: sim.url,
       pin_title: sim.title,
       pin_description: `"${parent.pin_title}" içeriğinin benzeri`,
       category: sim.category,
       age_filter: sim.age_filter || parent.age_filter,
       thumbnail_url: sim.thumbnail_url,
-      video_url: sim.video_url || parent.video_url,
+      video_url: sim.video_url,
       added_at: new Date().toISOString(),
       notes: `Benzer içerik olarak eklendi (Ana Pin: ${parent.pin_title})`,
       favorite: false,
@@ -316,15 +332,16 @@ export function PinterestFinderView({
   const handleAddAllSimilarPins = async (parent: PinterestItem) => {
     if (!parent.similar_pins || parent.similar_pins.length === 0) return;
     for (const sim of parent.similar_pins) {
+      if (!sim.video_url || sim.video_url === parent.video_url || sim.video_url.includes('mixkit.co')) continue;
       const newItem: PinterestItem = {
-        id: `pin-sim-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        id: getDeterministicPinId(sim.url, sim.video_url, sim.id),
         pin_url: sim.url,
         pin_title: sim.title,
         pin_description: `"${parent.pin_title}" içeriğinin benzeri`,
         category: sim.category,
         age_filter: sim.age_filter || parent.age_filter,
         thumbnail_url: sim.thumbnail_url,
-        video_url: sim.video_url || parent.video_url,
+        video_url: sim.video_url,
         added_at: new Date().toISOString(),
         notes: `Toplu benzer olarak eklendi (${parent.pin_title})`,
         favorite: false,

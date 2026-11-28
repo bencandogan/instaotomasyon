@@ -20,6 +20,13 @@ import {
   StoryPublishItem,
 } from '@/types';
 import { getAdminDb } from '@/lib/firebase/admin';
+import {
+  deduplicatePins,
+  getDeterministicPinId,
+  extractPinNumber,
+  normalizePinUrl,
+  normalizeVideoKey,
+} from '@/lib/utils/pinDeduplication';
 
 // Varsayılan İçerik Kategorileri
 export const DEFAULT_CATEGORIES: ContentCategory[] = [
@@ -1004,6 +1011,9 @@ export class PlatformRepository {
       items = [...memoryStore.pinterestItems];
     }
 
+    // Deduplicate and filter out dummy items
+    items = deduplicatePins(items);
+
     // Apply Filters
     if (filter) {
       if (filter.category && filter.category !== 'all') {
@@ -1029,7 +1039,7 @@ export class PlatformRepository {
       }
     }
 
-    return items;
+    return deduplicatePins(items);
   }
 
   static async getPinterestItemById(id: string): Promise<PinterestItem | null> {
@@ -1049,9 +1059,29 @@ export class PlatformRepository {
 
   static async savePinterestItem(item: PinterestItem): Promise<PinterestItem> {
     item.updated_at = new Date().toISOString();
-    const idx = memoryStore.pinterestItems.findIndex((p) => p.id === item.id);
+
+    // Deterministik ve kalıcı ID belirle
+    item.id = getDeterministicPinId(item.pin_url, item.video_url, item.id);
+
+    const pinNum = extractPinNumber(item.pin_url) || extractPinNumber(item.id);
+    const cleanUrl = normalizePinUrl(item.pin_url);
+    const vidKey = normalizeVideoKey(item.video_url);
+
+    // Aynı id, aynı pin numarası, aynı pin linki veya aynı video linkine sahip kayıt varsa yenisini oluşturma, güncelle
+    const idx = memoryStore.pinterestItems.findIndex((p) => {
+      if (p.id === item.id) return true;
+      if (pinNum) {
+        const pNum = extractPinNumber(p.pin_url) || extractPinNumber(p.id);
+        if (pNum && pNum === pinNum) return true;
+      }
+      if (cleanUrl && normalizePinUrl(p.pin_url) === cleanUrl) return true;
+      if (vidKey && normalizeVideoKey(p.video_url) === vidKey) return true;
+      return false;
+    });
+
     if (idx >= 0) {
-      memoryStore.pinterestItems[idx] = item;
+      item.id = memoryStore.pinterestItems[idx].id;
+      memoryStore.pinterestItems[idx] = { ...memoryStore.pinterestItems[idx], ...item };
     } else {
       memoryStore.pinterestItems.unshift(item);
     }
@@ -1069,7 +1099,22 @@ export class PlatformRepository {
   }
 
   static async deletePinterestItem(id: string): Promise<void> {
-    memoryStore.pinterestItems = memoryStore.pinterestItems.filter((p) => p.id !== id);
+    const target = memoryStore.pinterestItems.find((p) => p.id === id);
+    const targetPinNum = target ? (extractPinNumber(target.pin_url) || extractPinNumber(target.id)) : '';
+    const targetUrl = target ? normalizePinUrl(target.pin_url) : '';
+    const targetVid = target ? normalizeVideoKey(target.video_url) : '';
+
+    memoryStore.pinterestItems = memoryStore.pinterestItems.filter((p) => {
+      if (p.id === id) return false;
+      if (targetPinNum) {
+        const pNum = extractPinNumber(p.pin_url) || extractPinNumber(p.id);
+        if (pNum && pNum === targetPinNum) return false;
+      }
+      if (targetUrl && normalizePinUrl(p.pin_url) === targetUrl) return false;
+      if (targetVid && normalizeVideoKey(p.video_url) === targetVid) return false;
+      return true;
+    });
+
     try {
       const db = getAdminDb();
       if (db) {

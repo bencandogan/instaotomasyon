@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { PlatformRepository } from '@/lib/store/repository';
 import { PinterestItem } from '@/types';
+import { deduplicatePins, getDeterministicPinId } from '@/lib/utils/pinDeduplication';
 
 export async function GET(req: Request) {
   try {
@@ -25,7 +26,9 @@ export async function GET(req: Request) {
       limit,
     });
 
-    return NextResponse.json({ success: true, items });
+    const uniqueItems = deduplicatePins(items);
+
+    return NextResponse.json({ success: true, items: uniqueItems });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: msg }, { status: 500 });
@@ -39,12 +42,15 @@ export async function POST(req: Request) {
 
     // Toplu ekleme desteği (Girdiğimiz linkin benzerleri listesi)
     if (Array.isArray(body) || (body.items && Array.isArray(body.items))) {
-      const list: any[] = Array.isArray(body) ? body : body.items;
+      const rawList: any[] = Array.isArray(body) ? body : body.items;
+      const cleanList = deduplicatePins(rawList);
       const savedList: PinterestItem[] = [];
 
-      for (const itemData of list) {
+      for (const itemData of cleanList) {
+        const detId = getDeterministicPinId(itemData.pin_url, itemData.video_url, itemData.id);
+
         const item: PinterestItem = {
-          id: itemData.id || `pin-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          id: detId,
           pin_url: itemData.pin_url,
           pin_title: itemData.pin_title || 'Yeni Pinterest İçeriği',
           pin_description: itemData.pin_description || '',
@@ -71,19 +77,22 @@ export async function POST(req: Request) {
         savedList.push(saved);
       }
 
+      const uniqueSaved = deduplicatePins(savedList);
+
       await PlatformRepository.log(
         'INFO',
         'AI_CONTENT',
         'PINTEREST_BATCH_SAVED',
-        `${savedList.length} adet Pinterest içeriği doğrudan Ticari Kullanıma Uygun ve Onaylı olarak kaydedildi.`
+        `${uniqueSaved.length} adet Pinterest içeriği doğrudan Ticari Kullanıma Uygun ve Onaylı olarak kaydedildi.`
       );
 
-      return NextResponse.json({ success: true, items: savedList, count: savedList.length });
+      return NextResponse.json({ success: true, items: uniqueSaved, count: uniqueSaved.length });
     }
 
     // Tekli kayıt
+    const detId = getDeterministicPinId(body.pin_url, body.video_url, body.id);
     const newItem: PinterestItem = {
-      id: body.id || `pin-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      id: detId,
       pin_url: body.pin_url,
       pin_title: body.pin_title || 'Yeni Pinterest İçeriği',
       pin_description: body.pin_description || '',
