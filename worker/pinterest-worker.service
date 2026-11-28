@@ -1,0 +1,19 @@
+[Unit]
+Description=Pinterest Related Videos Worker (headless Chrome)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/pinterest-worker
+Environment=NODE_ENV=production
+Environment=PORT=3006
+Environment=PINTEREST_BROWSER_CONCURRENCY=2
+EnvironmentFile=-/opt/pinterest-worker/.env
+ExecStart=/usr/bin/node /opt/pinterest-worker/pinterest-related-worker.cjs
+Restart=always
+RestartSec=5
+User=root
+
+[Install]
+WantedBy=multi-user.target

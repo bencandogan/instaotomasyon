@@ -1,16 +1,24 @@
 import { NextResponse } from 'next/server';
 import { PinterestService } from '@/lib/services/pinterestService';
 import { PinterestBrowserService } from '@/lib/services/pinterestBrowserService';
+import { PinterestWorkerClient } from '@/lib/services/pinterestWorkerClient';
 import { PlatformRepository } from '@/lib/store/repository';
 
 export const maxDuration = 300; // Benzer video taraması Chrome üzerinden yapıldığı için yüksek tutuldu
 
-/** Sağlık kontrolü: sunucuda Chrome/Chromium var mı? */
+/** Sağlık kontrolü: worker ve/veya yerel Chrome hazır mı? */
 export async function GET() {
+  const workerConfigured = PinterestWorkerClient.isConfigured();
+  const worker = workerConfigured ? await PinterestWorkerClient.health(4000) : { ok: false, chrome: false };
+
   return NextResponse.json({
     success: true,
     chromeAvailable: PinterestBrowserService.isAvailable(),
     executablePath: PinterestBrowserService.resolveExecutablePath(),
+    workerConfigured,
+    workerUrl: PinterestWorkerClient.baseUrl() || null,
+    workerHealthy: worker.ok,
+    workerChrome: worker.chrome,
     defaultMaxVideos: Number(process.env.PINTEREST_RELATED_MAX_VIDEOS || 60),
     concurrency: Number(process.env.PINTEREST_BROWSER_CONCURRENCY || 2),
   });

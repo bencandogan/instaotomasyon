@@ -149,6 +149,18 @@ Durum kontrolü: `GET /api/pinterest/scan` → `{ chromeAvailable, executablePat
 
 Bu durumda tarama çökmez: ana video kaydedilir, sistem loglarına `PINTEREST_RELATED_FETCH_FAILED` uyarısı (proxy/çerez önerisiyle) yazılır.
 
+### 🛰️ Uzak worker (önerilen yöntem)
+
+Datacenter IP'leri engellendiği için benzer videolar, Pinterest'in kısıtlamadığı lokasyondaki (ör. Türkiye) küçük bir VPS'te çalışan worker'dan çekilebilir. Worker kodu ve kurulum: [`worker/README.md`](worker/README.md)
+
+```bash
+# Ana sunucudaki .env.local
+PINTEREST_WORKER_URL=http://<worker-ip>:3006
+PINTEREST_WORKER_SECRET=<paylaşılan-anahtar>
+```
+
+Akış: **worker → yerel Chrome → boş**. Worker tanımlıysa önce o denenir, başarısızsa yerel Chrome'a düşer.
+
 ---
 
 ## 🔒 Güvenlik Notları

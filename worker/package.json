@@ -1,0 +1,17 @@
+{
+  "name": "pinterest-related-worker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pinterest pin sayfasının altındaki benzer videoları Chrome üzerinden toplayan küçük HTTP worker'ı",
+  "main": "pinterest-related-worker.cjs",
+  "scripts": {
+    "start": "node pinterest-related-worker.cjs",
+    "self-test": "node pinterest-related-worker.cjs --self-test"
+  },
+  "dependencies": {
+    "puppeteer-core": "^25.19.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

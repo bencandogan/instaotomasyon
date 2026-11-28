@@ -12,6 +12,7 @@ import { PlatformRepository } from '@/lib/store/repository';
 import { getAdminStorage } from '@/lib/firebase/admin';
 import { AIContentService } from '@/lib/services/aiContentService';
 import { PinterestBrowserService } from '@/lib/services/pinterestBrowserService';
+import { PinterestWorkerClient } from '@/lib/services/pinterestWorkerClient';
 
 export interface ScanUrlResult {
   pin_url: string;
@@ -591,37 +592,54 @@ export class PinterestService {
     const detectedCategory: PinterestCategory = chosenCategory || this.autoDetectCategory(trimmed, title, description);
 
     // 3. Pin sayfasının ALTINDA gösterilen "benzer videolar" akışını çekme.
-    //    NOT: Pinterest'in /_/graphql/ endpoint'i sunucu tarafı fetch (Node) ile çağrıldığında
-    //    JSON yerine HTML sayfası veya 403 döndürüyor. Bu yüzden istek, sunucuda kurulu
-    //    gerçek Chrome/Chromium oturumunun içinden atılmak zorunda.
+    //    Pinterest bu akışı sunucu tarafı fetch'te HTML/403 ile engelliyor ve datacenter
+    //    IP'lerine boş döndürebiliyor. Bu yüzden iki kaynak sırayla denenir:
+    //      1) Pinterest'in kısıtlamadığı lokasyondaki worker servisi (PINTEREST_WORKER_URL)
+    //      2) Yerel Chrome/Chromium (puppeteer-core)
     const realRecommendations: SimilarPinItem[] = [];
     if (pinId) {
-      if (PinterestBrowserService.isAvailable()) {
+      const relatedOptions = {
+        seedTitle: title,
+        category: detectedCategory,
+        ageFilter: chosenAge || '25–30 yaş görünümü',
+        maxVideos: this.relatedVideoLimit(),
+        // Ana pinin kendi videosu benzer listeye girmesin
+        excludeVideoUrls: [videoUrl],
+      };
+
+      let relatedError = '';
+
+      // 1) Uzak worker (tercih edilen yol)
+      if (PinterestWorkerClient.isConfigured()) {
         try {
-          const relatedVideos = await PinterestBrowserService.fetchRelatedVideos(pinId, {
-            seedTitle: title,
-            category: detectedCategory,
-            ageFilter: chosenAge || '25–30 yaş görünümü',
-            maxVideos: this.relatedVideoLimit(),
-            // Ana pinin kendi videosu benzer listeye girmesin
-            excludeVideoUrls: [videoUrl],
-          });
-          realRecommendations.push(...relatedVideos);
+          const workerPins = await PinterestWorkerClient.fetchRelatedVideos(pinId, relatedOptions);
+          realRecommendations.push(...workerPins);
         } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          console.warn('Pinterest benzer video çekme hatası:', msg);
-          await this.safeLog(
-            'WARN',
-            'PINTEREST_RELATED_FETCH_FAILED',
-            `"${title}" için benzer videolar alınamadı: ${msg}`,
-            { pinId }
-          );
+          relatedError = err instanceof Error ? err.message : String(err);
+          console.warn('Pinterest worker hatası:', relatedError);
         }
-      } else {
+      }
+
+      // 2) Worker tanımlı değilse veya başarısız olduysa yerel Chrome
+      if (realRecommendations.length === 0 && PinterestBrowserService.isAvailable()) {
+        try {
+          const browserPins = await PinterestBrowserService.fetchRelatedVideos(pinId, relatedOptions);
+          realRecommendations.push(...browserPins);
+          relatedError = '';
+        } catch (err) {
+          relatedError = err instanceof Error ? err.message : String(err);
+          console.warn('Pinterest benzer video çekme hatası:', relatedError);
+        }
+      }
+
+      if (realRecommendations.length === 0) {
+        const noSource = !PinterestWorkerClient.isConfigured() && !PinterestBrowserService.isAvailable();
         await this.safeLog(
           'WARN',
-          'PINTEREST_CHROME_MISSING',
-          'Sunucuda Chrome/Chromium bulunamadı; benzer videolar çekilemiyor (apt install -y chromium).',
+          noSource ? 'PINTEREST_CHROME_MISSING' : 'PINTEREST_RELATED_FETCH_FAILED',
+          noSource
+            ? 'Benzer videolar için ne worker (PINTEREST_WORKER_URL) ne de Chrome/Chromium tanımlı; çekilemiyor.'
+            : `"${title}" için benzer videolar alınamadı: ${relatedError || 'bilinmeyen hata'}`,
           { pinId }
         );
       }
