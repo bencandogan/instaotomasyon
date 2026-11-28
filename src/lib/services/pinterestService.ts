@@ -724,10 +724,8 @@ export class PinterestService {
       }
     }
 
-    // Sayfadan canlı öneri gelmediyse zengin kategori benzer videolarını havuza ekle
-    const finalSimilarPins: SimilarPinItem[] = realRecommendations.length > 0
-      ? realRecommendations
-      : this.generateSimilarPins(detectedCategory, chosenAge);
+    // Sadece gerçek Pinterest önerileri varsa ekle; asla hafızadan sahte/şablon video ekleme!
+    const finalSimilarPins: SimilarPinItem[] = realRecommendations.length > 0 ? realRecommendations : [];
 
     return {
       pin_url: trimmed,
@@ -755,8 +753,8 @@ export class PinterestService {
     shuffle: boolean = true
   ): Promise<ScanUrlResult[]> {
     const validUrls = urls.map(u => u.trim()).filter(Boolean);
-    // Vercel serverless zaman aşımı güvenliği için en fazla ilk 4-5 URL paralel taranır
-    const targetUrls = validUrls.slice(0, 5);
+    // Vercel serverless için en fazla 20 URL paralel taranır
+    const targetUrls = validUrls.slice(0, 20);
 
     const settled = await Promise.allSettled(
       targetUrls.map((url) => this.scanPinterestUrl(url, category, ageFilter))

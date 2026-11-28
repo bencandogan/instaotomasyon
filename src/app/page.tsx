@@ -721,6 +721,7 @@ export default function AdminDashboardPage() {
       // 1. Girdiğimiz ana URL'yi doğrudan "Ticari Kullanıma Uygun" ve onaylı yap
       itemsToSave.push({
         ...mainResult,
+        id: mainResult.id || `pin-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
         duration: mainResult.duration || '0:14',
         usage_permission_status: 'Ticari kullanım uygun',
         approval_status: 'approved',
@@ -811,6 +812,7 @@ export default function AdminDashboardPage() {
         // Ana pin
         allItemsToSave.push({
           ...mainResult,
+          id: mainResult.id || `pin-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
           duration: mainResult.duration || '0:14',
           usage_permission_status: 'Ticari kullanım uygun',
           approval_status: 'approved',

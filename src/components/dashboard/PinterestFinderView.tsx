@@ -213,6 +213,11 @@ export function PinterestFinderView({
       .map((u) => u.trim())
       .filter((u) => u.length > 5);
     await persistUrls(lines);
+    if (lines.length === 1) {
+      await onScanUrl(lines[0], undefined, undefined);
+    } else if (lines.length > 1) {
+      await onScanBulk(lines, undefined, undefined, shuffleScan);
+    }
   };
 
   const handleRemoveSavedUrl = async (urlToRemove: string) => {
@@ -537,12 +542,12 @@ export function PinterestFinderView({
               <button
                 type="button"
                 onClick={handleManualSaveUrls}
-                disabled={!urlInput.trim()}
-                className="px-3 py-1.5 rounded-lg border border-zinc-700 hover:border-zinc-600 bg-zinc-800 hover:bg-zinc-750 text-xs font-medium text-zinc-200 transition flex items-center gap-1.5 disabled:opacity-40"
-                title="Şu anki girdiğiniz linkleri sistem hafızasına kaydet"
+                disabled={!urlInput.trim() || isLoading}
+                className="px-3.5 py-1.5 rounded-lg border border-zinc-700 hover:border-emerald-600 bg-zinc-800 hover:bg-zinc-750 text-xs font-semibold text-emerald-400 transition flex items-center gap-1.5 disabled:opacity-40 cursor-pointer"
+                title="Girdiğiniz linkleri kaydet ve videoları doğrudan tara"
               >
                 <Save className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Linkleri Kaydet</span>
+                <span>Linkleri Kaydet ve Videoları Çek</span>
               </button>
 
               {savedUrls.length > 0 && (
@@ -622,7 +627,7 @@ export function PinterestFinderView({
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white text-xs font-semibold shadow-lg shadow-rose-950/40 transition disabled:opacity-50 cursor-pointer"
             >
               {isLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-              <span>{isBulkMode ? 'Tüm Bağlantıları Tara ve Ekle (50–60 Video)' : 'URL’yi Tara ve Benzerleri Keşfet (50–60 Video)'}</span>
+              <span>{isBulkMode ? 'Tüm Bağlantılardaki Videoları Çek ve Ekle' : 'URL’deki Gerçek Videoyu Çek ve Ekle'}</span>
             </button>
           </div>
         </form>
