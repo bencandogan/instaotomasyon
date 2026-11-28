@@ -554,8 +554,8 @@ export class PinterestService {
       try {
         let bookmark: string | null = null;
         let page = 1;
-        const maxPages = 8; // ~60-70 video için sayfalama
-        const targetCount = 70;
+        const maxPages = 2; // Vercel 10s timeout sınırına takılmamak için hızlı ve hafif (15-20 video)
+        const targetCount = 20;
 
         while (realRecommendations.length < targetCount && page <= maxPages) {
           const dataObj = {
@@ -701,7 +701,7 @@ export class PinterestService {
   }
 
   /**
-   * Birden fazla Pinterest bağlantısını toplu olarak tarar ve isteğe bağlı olarak sırayı karıştırır
+   * Birden fazla Pinterest bağlantısını toplu olarak paralel tarar ve sırayı karıştırır
    */
   static async scanBulkUrls(
     urls: string[],
@@ -709,15 +709,18 @@ export class PinterestService {
     ageFilter?: PinterestAgeFilter,
     shuffle: boolean = true
   ): Promise<ScanUrlResult[]> {
+    const validUrls = urls.map(u => u.trim()).filter(Boolean);
+    // Vercel serverless zaman aşımı güvenliği için en fazla ilk 4-5 URL paralel taranır
+    const targetUrls = validUrls.slice(0, 5);
+
+    const settled = await Promise.allSettled(
+      targetUrls.map((url) => this.scanPinterestUrl(url, category, ageFilter))
+    );
+
     const results: ScanUrlResult[] = [];
-    for (const url of urls) {
-      if (url.trim()) {
-        try {
-          const item = await this.scanPinterestUrl(url, category, ageFilter);
-          results.push(item);
-        } catch {
-          // Hatalı URL'i atla
-        }
+    for (const r of settled) {
+      if (r.status === 'fulfilled' && r.value) {
+        results.push(r.value);
       }
     }
 
